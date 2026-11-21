@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LanguageCode {
+  am
+  om
+  en
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+}
+
+enum BusinessCategory {
+  RETAIL
+  GROCERY
+  CAFE_RESTAURANT
+  TRADER
+  WHOLESALE
+  SERVICE
+  OTHER
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionCategory {
+  SALES
+  SERVICE_INCOME
+  OTHER_INCOME
+  INVENTORY_PURCHASE
+  TRANSPORT
+  RENT
+  UTILITIES
+  SALARY
+  FOOD
+  MARKETING
+  OTHER_EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  TELEBIRR
+  BANK
+  CREDIT
+}
+
+enum TransactionSource {
+  VOICE
+  CHAT
+  MANUAL
+}
+
+enum TransactionStatus {
+  COMPLETED
+  VOIDED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum MessageModality {
+  TEXT
+  VOICE
+}
+
+enum ActionStatus {
+  NONE
+  PENDING_CONFIRMATION
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id                String           @id @default(uuid()) @db.Uuid
+  name              String           @db.VarChar(120)
+  phone             String?          @unique @db.VarChar(24)
+  email             String?          @unique @db.VarChar(160)
+  passwordHash      String           @map("password_hash") @db.VarChar(255)
+  preferredLanguage LanguageCode     @default(am) @map("preferred_language")
+  role              UserRole         @default(OWNER)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  businesses        Business[]
+  transactions      Transaction[]
+  conversations     AiConversation[]
+
+  @@map("users")
+}
+
+model Business {
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @map("owner_id") @db.Uuid
+  name              String           @db.VarChar(140)
+  category          BusinessCategory @default(RETAIL)
+  location          String?          @db.VarChar(140)
+  currency          String           @default("ETB") @db.VarChar(3)
+  preferredLanguage LanguageCode     @default(am) @map("preferred_language")
+  plan              SubscriptionPlan @default(FREE)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner             User             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  transactions      Transaction[]
+  conversations     AiConversation[]
+  messages          AiMessage[]
+
+  @@index([ownerId])
+  @@map("businesses")
+}
+
+model Transaction {
+  id               String              @id @default(uuid()) @db.Uuid
+  businessId       String              @map("business_id") @db.Uuid
+  recordedById     String              @map("recorded_by_id") @db.Uuid
+  type             TransactionType
+  category         TransactionCategory
+  amount           Decimal             @db.Decimal(12, 2)
+  currency         String              @default("ETB") @db.VarChar(3)
+  description      String              @db.VarChar(280)
+  paymentMethod    PaymentMethod       @default(CASH) @map("payment_method")
+  counterpartyName String?             @map("counterparty_name") @db.VarChar(120)
+  transactionDate  DateTime            @default(now()) @map("transaction_date") @db.Timestamptz(6)
+  source           TransactionSource   @default(MANUAL)
+  idempotencyKey   String              @map("idempotency_key") @db.VarChar(80)
+  status           TransactionStatus   @default(COMPLETED)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business         Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  recordedBy       User                @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  linkedMessages   AiMessage[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, transactionDate(sort: Desc)])
+  @@index([businessId, type, category])
+  @@map("transactions")
+}
+
+model AiConversation {
+  id         String       @id @default(uuid()) @db.Uuid
+  businessId String       @map("business_id") @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  language   LanguageCode @default(am)
+  title      String       @default("Mizan Business Assistant") @db.VarChar(140)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   AiMessage[]
+
+  @@index([businessId, updatedAt(sort: Desc)])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id                  String          @id @default(uuid()) @db.Uuid
+  conversationId      String          @map("conversation_id") @db.Uuid
+  businessId          String          @map("business_id") @db.Uuid
+  role                MessageRole
+  modality            MessageModality @default(TEXT)
+  displayText         String          @map("display_text")
+  spokenText          String?         @map("spoken_text")
+  rawTranscript       String?         @map("raw_transcript")
+  intent              String?         @db.VarChar(50)
+  confidence          Float?
+  proposedAction      Json?           @map("proposed_action")
+  actionStatus        ActionStatus    @default(NONE) @map("action_status")
+  linkedTransactionId String?         @map("linked_transaction_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation        AiConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  linkedTransaction   Transaction?    @relation(fields: [linkedTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([businessId, actionStatus])
+  @@map("ai_messages")
+}

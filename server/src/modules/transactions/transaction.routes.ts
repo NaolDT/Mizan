@@ -1,0 +1,114 @@
+import { Router } from "express";
+import { z } from "zod";
+import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requireTenant } from "../../middleware/tenant.middleware.js";
+import { sendSuccess } from "../../utils/apiResponse.js";
+import {
+  createTransaction,
+  listTransactions,
+  updateTransaction,
+  voidTransaction,
+} from "./transaction.service.js";
+
+export const transactionRouter = Router();
+
+transactionRouter.use(requireAuth, requireTenant);
+
+const categoryEnum = z.enum([
+  "SALES",
+  "SERVICE_INCOME",
+  "OTHER_INCOME",
+  "INVENTORY_PURCHASE",
+  "TRANSPORT",
+  "RENT",
+  "UTILITIES",
+  "SALARY",
+  "FOOD",
+  "MARKETING",
+  "OTHER_EXPENSE",
+]);
+
+const paymentMethodEnum = z.enum(["CASH", "TELEBIRR", "BANK", "CREDIT"]);
+
+const listQuerySchema = z.object({
+  range: z.enum(["today", "week", "month", "all"]).optional(),
+  type: z.enum(["INCOME", "EXPENSE"]).optional(),
+  category: categoryEnum.optional(),
+  paymentMethod: paymentMethodEnum.optional(),
+  includeVoided: z
+    .string()
+    .optional()
+    .transform((val) => val === "true"),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const createTxSchema = z.object({
+  type: z.enum(["INCOME", "EXPENSE"]),
+  category: categoryEnum,
+  amount: z.coerce.number().positive().max(100_000_000),
+  description: z.string().min(1).max(280),
+  paymentMethod: paymentMethodEnum.optional(),
+  counterpartyName: z.string().max(120).nullable().optional(),
+  transactionDate: z.string().optional(),
+  source: z.enum(["VOICE", "CHAT", "MANUAL"]).optional(),
+  idempotencyKey: z.string().min(4).max(80),
+});
+
+const updateTxSchema = z.object({
+  category: categoryEnum.optional(),
+  amount: z.coerce.number().positive().max(100_000_000).optional(),
+  description: z.string().min(1).max(280).optional(),
+  paymentMethod: paymentMethodEnum.optional(),
+  counterpartyName: z.string().max(120).nullable().optional(),
+  transactionDate: z.string().optional(),
+});
+
+transactionRouter.get("/", async (req, res, next) => {
+  try {
+    const query = listQuerySchema.parse(req.query);
+    const result = await listTransactions(req.tenant!.businessId, query);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+transactionRouter.post("/", async (req, res, next) => {
+  try {
+    const body = createTxSchema.parse(req.body);
+    const tx = await createTransaction(
+      req.tenant!.businessId,
+      req.tenant!.userId,
+      body
+    );
+    sendSuccess(res, tx, 201);
+  } catch (err) {
+    next(err);
+  }
+});
+
+transactionRouter.patch("/:id", async (req, res, next) => {
+  try {
+    const body = updateTxSchema.parse(req.body);
+    const updated = await updateTransaction(
+      req.tenant!.businessId,
+      String(req.params.id),
+      body
+    );
+    sendSuccess(res, updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+transactionRouter.post("/:id/void", async (req, res, next) => {
+  try {
+    const voided = await voidTransaction(
+      req.tenant!.businessId,
+      String(req.params.id)
+    );
+    sendSuccess(res, voided);
+  } catch (err) {
+    next(err);
+  }
+});
