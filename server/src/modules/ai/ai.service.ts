@@ -9,7 +9,11 @@ import type {
   LanguageCode,
   MessageModality,
   PaymentMethod,
+  ProposedActionDraft,
+  ProposedCustomerPaymentDraft,
+  ProposedStockDraft,
   ProposedTransactionDraft,
+  StockMovementReason,
   SupportedAiIntent,
   TransactionCategory,
 } from "@mizan/shared";
@@ -24,8 +28,20 @@ import {
   type AiBusinessContextSnapshot,
 } from "../analytics/analytics.service.js";
 import {
+  findCustomerByName,
+  getCustomer,
+  recordCustomerPayment,
+} from "../customers/customers.service.js";
+import {
+  adjustStock,
+  findOrCreateProductByName,
+  findProductByName,
+  getProduct,
+} from "../inventory/inventory.service.js";
+import {
   coerceCategoryForType,
   createTransaction,
+  mapTransactionDto,
 } from "../transactions/transaction.service.js";
 import { synthesizeMeteredSpeech } from "../voice/voice.metered.js";
 
@@ -41,7 +57,21 @@ interface StructuredLlmResult {
     description: string;
     paymentMethod?: PaymentMethod;
     counterpartyName?: string | null;
+    productName?: string | null;
+    quantity?: number | null;
     transactionDate?: string;
+  } | null;
+  proposedStock?: {
+    productName: string;
+    quantityDelta: number;
+    reason: StockMovementReason;
+    note?: string;
+  } | null;
+  proposedPayment?: {
+    customerName: string;
+    amount: number;
+    paymentMethod?: PaymentMethod;
+    note?: string;
   } | null;
 }
 
@@ -61,6 +91,10 @@ const AI_RESPONSE_SCHEMA: Schema = {
         "business_advice",
         "general_greeting",
         "clarification_needed",
+        "query_inventory",
+        "adjust_stock",
+        "query_customer_balance",
+        "record_customer_payment",
       ],
     },
     confidence: {
@@ -106,6 +140,8 @@ const AI_RESPONSE_SCHEMA: Schema = {
           nullable: true,
         },
         counterpartyName: { type: Type.STRING, nullable: true },
+        productName: { type: Type.STRING, nullable: true },
+        quantity: { type: Type.NUMBER, nullable: true },
         transactionDate: {
           type: Type.STRING,
           description: "ISO date YYYY-MM-DD in East Africa Time",
@@ -113,6 +149,32 @@ const AI_RESPONSE_SCHEMA: Schema = {
         },
       },
       required: ["type", "category", "amount", "description"],
+    },
+    proposedStock: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: {
+        productName: { type: Type.STRING },
+        quantityDelta: { type: Type.NUMBER },
+        reason: { type: Type.STRING, enum: ["RESTOCK", "SALE", "ADJUSTMENT"] },
+        note: { type: Type.STRING, nullable: true },
+      },
+      required: ["productName", "quantityDelta", "reason"],
+    },
+    proposedPayment: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: {
+        customerName: { type: Type.STRING },
+        amount: { type: Type.NUMBER },
+        paymentMethod: {
+          type: Type.STRING,
+          enum: ["CASH", "TELEBIRR", "BANK", "CREDIT"],
+          nullable: true,
+        },
+        note: { type: Type.STRING, nullable: true },
+      },
+      required: ["customerName", "amount"],
     },
   },
   required: ["intent", "confidence", "displayMessage", "spokenMessage"],
@@ -129,7 +191,7 @@ export function mapAiMessageDto(msg: AiMessage): AiMessageDto {
     rawTranscript: msg.rawTranscript,
     intent: (msg.intent as SupportedAiIntent | null) ?? null,
     confidence: msg.confidence,
-    proposedAction: (msg.proposedAction as ProposedTransactionDraft | null) ?? null,
+    proposedAction: (msg.proposedAction as ProposedActionDraft | null) ?? null,
     actionStatus: msg.actionStatus,
     linkedTransactionId: msg.linkedTransactionId,
     createdAt: msg.createdAt.toISOString(),
@@ -245,6 +307,96 @@ function buildDeterministicFallbackResult(
       userText
     );
 
+  const isInventoryAsk =
+    /(how many|in stock|inventory|low stock|ክምችት|ቀርቷል|ዘይት|kuufama|meeqa qaba)/i.test(userText);
+  const isStockAdjust =
+    /(add .+ stock|restock|add \d+|ክምችት ጨምር|kuufama dabali)/i.test(userText);
+  const isCustomerAsk =
+    /(owe|owes|owed|outstanding|ይቀረኛል|ዱቤ|na hafaa|liqaa)/i.test(userText);
+
+  if (isStockAdjust && parsedAmount && parsedAmount > 0 && !isIncome && !isExpense) {
+    const productHint =
+      ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase()))?.name ??
+      userText.replace(/\d[\d,]*(?:\.\d+)?/g, "").trim().slice(0, 80);
+    const displayMessage =
+      language === "am"
+        ? `${productHint || "እቃ"} ላይ ${parsedAmount} ክምችት ለመጨመር አዘጋጅቻለሁ። ትክክል ከሆነ ያጽድቁት።`
+        : language === "om"
+          ? `${productHint || "Meeshaa"} irratti ${parsedAmount} kuufama dabaluuf qopheesseera. Mirkaneessi.`
+          : `I prepared a stock increase of ${parsedAmount} for ${productHint || "this product"}. Confirm to save.`;
+    return {
+      intent: "adjust_stock",
+      confidence: 0.85,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedStock: {
+        productName: productHint || "product",
+        quantityDelta: parsedAmount,
+        reason: "RESTOCK",
+        note: userText.trim().slice(0, 200),
+      },
+    };
+  }
+
+  if (isInventoryAsk && ctx.products.length > 0) {
+    const named = ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase()));
+    const low = ctx.products.filter((p) => p.isLowStock);
+    const displayMessage = named
+      ? language === "am"
+        ? `${named.name}: ${named.quantityOnHand} ${named.unit} በክምችት አለ።`
+        : language === "om"
+          ? `${named.name}: ${named.quantityOnHand} ${named.unit} kuufama keessa jira.`
+          : `You currently have ${named.quantityOnHand} ${named.unit} of ${named.name} in stock.`
+      : language === "am"
+        ? low.length
+          ? `${low.length} እቃ ዝቅተኛ ክምችት ላይ ነው፦ ${low.map((p) => p.name).join(", ")}።`
+          : `የተመዘገቡ እቃዎች፦ ${ctx.products.map((p) => `${p.name} (${p.quantityOnHand})`).join(", ")}።`
+        : language === "om"
+          ? low.length
+            ? `Meeshaaleen ${low.length} kuufama gadi aanaa qabu: ${low.map((p) => p.name).join(", ")}.`
+            : `Kuufama: ${ctx.products.map((p) => `${p.name} (${p.quantityOnHand})`).join(", ")}.`
+          : low.length
+            ? `${low.length} product(s) are low: ${low.map((p) => p.name).join(", ")}.`
+            : `Current stock: ${ctx.products.map((p) => `${p.name} ${p.quantityOnHand} ${p.unit}`).join("; ")}.`;
+    return {
+      intent: "query_inventory",
+      confidence: 0.92,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
+  if (isCustomerAsk) {
+    const named = ctx.customersOwing.find((c) =>
+      userText.toLowerCase().includes(c.name.toLowerCase())
+    );
+    const displayMessage = named
+      ? language === "am"
+        ? `${named.name} ${named.outstandingBalance.toLocaleString("en-US")} ETB ይቀረዎታል።`
+        : language === "om"
+          ? `${named.name} ETB ${named.outstandingBalance.toLocaleString("en-US")} si hafaa.`
+          : `${named.name} currently has an outstanding balance of ${named.outstandingBalance.toLocaleString("en-US")} ETB.`
+      : ctx.customersOwing.length === 0
+        ? language === "am"
+          ? "በአሁኑ ጊዜ ዱቤ የሚቀረው ደንበኛ የለም።"
+          : language === "om"
+            ? "Ammaaf maamilaan liqaa qabu hin jiru."
+            : "No customer currently has an outstanding balance."
+        : language === "am"
+          ? `ዱቤ የሚቀሩት፦ ${ctx.customersOwing.map((c) => `${c.name} ${c.outstandingBalance.toLocaleString("en-US")} ETB`).join("፣ ")}።`
+          : language === "om"
+            ? `Maamiltoota liqaa qaban: ${ctx.customersOwing.map((c) => `${c.name} ETB ${c.outstandingBalance.toLocaleString("en-US")}`).join(", ")}.`
+            : `Customers with outstanding balances: ${ctx.customersOwing.map((c) => `${c.name} ${c.outstandingBalance.toLocaleString("en-US")} ETB`).join("; ")}.`;
+    return {
+      intent: "query_customer_balance",
+      confidence: 0.92,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
   if (parsedAmount && parsedAmount > 0 && (isIncome || isExpense)) {
     const txType = isExpense && !isIncome ? "EXPENSE" : "INCOME";
     let category: TransactionCategory = txType === "INCOME" ? "SALES" : "OTHER_EXPENSE";
@@ -319,7 +471,7 @@ async function runGroundedLlmReasoning(
   language: LanguageCode,
   ctx: AiBusinessContextSnapshot,
   recentHistory: Array<{ role: "USER" | "ASSISTANT"; text: string }>,
-  pendingDraft: ProposedTransactionDraft | null
+  pendingDraft: ProposedActionDraft | null
 ): Promise<StructuredLlmResult> {
   if (!env.GEMINI_API_KEY) {
     return buildDeterministicFallbackResult(userText, language, ctx, Boolean(pendingDraft));
@@ -339,10 +491,13 @@ CRITICAL SAFETY & DETERMINISTIC RULES:
 1. NEVER invent, guess, or calculate financial totals yourself. Use ONLY the exact pre-computed SQL numbers in BUSINESS_FINANCIAL_CONTEXT_JSON below.
 2. Currency is Ethiopian Birr (ETB). Today's date in Addis Ababa (EAT, UTC+3) is ${ctx.eatTodayDate}.
 3. If the merchant wants to record income/sales or an expense:
-   - Extract type ("INCOME" or "EXPENSE"), category, positive numeric amount, concise description, paymentMethod ("CASH", "TELEBIRR", "BANK", or "CREDIT"), counterpartyName (if a person/supplier is named), and transactionDate (YYYY-MM-DD, default ${ctx.eatTodayDate}).
-   - If the amount is missing or unclear, set intent = "clarification_needed", proposedTransaction = null, and politely ask for the amount.
-   - NEVER claim the transaction is already saved! Tell the merchant you prepared the preview and ask them to confirm it.
-4. Keep responses concise (2-4 short sentences max) so voice playback feels snappy and helpful.
+   - Extract type ("INCOME" or "EXPENSE"), category, positive numeric amount, concise description, paymentMethod ("CASH", "TELEBIRR", "BANK", or "CREDIT"), counterpartyName (if a person is named), productName and quantity if a product is named, and transactionDate (YYYY-MM-DD, default ${ctx.eatTodayDate}).
+   - CREDIT sales: set paymentMethod CREDIT and counterpartyName to the customer.
+   - If the amount is missing or unclear, set intent = "clarification_needed" and ask for the amount.
+   - NEVER claim the change is already saved. Ask them to confirm the preview.
+4. Inventory: for stock questions use PRODUCTS_JSON only. For adding/removing stock, set intent = "adjust_stock" and fill proposedStock (quantityDelta positive for restock, negative for sale/use). If the product name is unclear, ask which product.
+5. Customers: for "how much does X owe" use CUSTOMERS_OWING_JSON only. For "X paid me N birr", set intent = "record_customer_payment" and fill proposedPayment. Never invent a balance.
+6. Keep responses concise (2-4 short sentences) so voice playback stays short.
 
 ACTIVE_PENDING_CONFIRMATION_DRAFT:
 ${pendingDraft ? JSON.stringify(pendingDraft) : "NONE"}
@@ -362,6 +517,8 @@ ${JSON.stringify({
     amount: tx.amount,
     description: tx.description,
   })),
+  products: ctx.products,
+  customersOwing: ctx.customersOwing,
 })}`;
 
   const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
@@ -499,10 +656,10 @@ export async function processAssistantTurn(params: {
     params.language,
     contextSnapshot,
     orderedPrior.map((m) => ({ role: m.role, text: m.displayText })),
-    (latestPendingMsg?.proposedAction as ProposedTransactionDraft | null) ?? null
+    (latestPendingMsg?.proposedAction as ProposedActionDraft | null) ?? null
   );
 
-  let validatedDraft: ProposedTransactionDraft | null = null;
+  let validatedDraft: ProposedActionDraft | null = null;
   if (
     (llmOutput.intent === "record_income" || llmOutput.intent === "record_expense") &&
     llmOutput.proposedTransaction &&
@@ -512,6 +669,7 @@ export async function processAssistantTurn(params: {
   ) {
     const rawDraft = llmOutput.proposedTransaction;
     validatedDraft = {
+      kind: "TRANSACTION",
       type: rawDraft.type,
       category: coerceCategoryForType(rawDraft.type, rawDraft.category),
       amount: Number(rawDraft.amount.toFixed(2)),
@@ -519,7 +677,45 @@ export async function processAssistantTurn(params: {
       description: rawDraft.description.trim().slice(0, 240) || trimmedText.slice(0, 240),
       paymentMethod: rawDraft.paymentMethod ?? "CASH",
       counterpartyName: rawDraft.counterpartyName?.trim() || null,
+      customerName: rawDraft.counterpartyName?.trim() || null,
+      productName: rawDraft.productName?.trim() || null,
+      quantity:
+        rawDraft.quantity != null && Number.isFinite(rawDraft.quantity)
+          ? Number(rawDraft.quantity)
+          : null,
       transactionDate: rawDraft.transactionDate || contextSnapshot.eatTodayDate,
+    };
+  } else if (
+    llmOutput.intent === "adjust_stock" &&
+    llmOutput.proposedStock &&
+    llmOutput.proposedStock.productName.trim() &&
+    Number.isFinite(llmOutput.proposedStock.quantityDelta) &&
+    llmOutput.proposedStock.quantityDelta !== 0 &&
+    llmOutput.confidence >= 0.65
+  ) {
+    const raw = llmOutput.proposedStock;
+    validatedDraft = {
+      kind: "STOCK",
+      productName: raw.productName.trim().slice(0, 120),
+      quantityDelta: Number(raw.quantityDelta.toFixed(2)),
+      reason: raw.reason,
+      note: raw.note?.trim().slice(0, 200) || trimmedText.slice(0, 200),
+    };
+  } else if (
+    llmOutput.intent === "record_customer_payment" &&
+    llmOutput.proposedPayment &&
+    llmOutput.proposedPayment.customerName.trim() &&
+    Number.isFinite(llmOutput.proposedPayment.amount) &&
+    llmOutput.proposedPayment.amount > 0 &&
+    llmOutput.confidence >= 0.65
+  ) {
+    const raw = llmOutput.proposedPayment;
+    validatedDraft = {
+      kind: "CUSTOMER_PAYMENT",
+      customerName: raw.customerName.trim().slice(0, 120),
+      amount: Number(raw.amount.toFixed(2)),
+      paymentMethod: raw.paymentMethod ?? "CASH",
+      note: raw.note?.trim().slice(0, 200) || trimmedText.slice(0, 200),
     };
   }
 
@@ -603,32 +799,87 @@ export async function confirmProposedAction(
     const summary = await getFinancialSummary(businessId, "month");
     return {
       message: mapAiMessageDto(message),
-      transaction: {
-        id: existingTx.id,
-        businessId: existingTx.businessId,
-        recordedById: existingTx.recordedById,
-        type: existingTx.type,
-        category: existingTx.category,
-        amount: Number(existingTx.amount.toFixed(2)),
-        currency: "ETB",
-        description: existingTx.description,
-        paymentMethod: existingTx.paymentMethod,
-        counterpartyName: existingTx.counterpartyName,
-        transactionDate: existingTx.transactionDate.toISOString(),
-        source: existingTx.source,
-        status: existingTx.status,
-        createdAt: existingTx.createdAt.toISOString(),
-      },
+      transaction: mapTransactionDto(existingTx),
+      product: existingTx.productId ? await getProduct(businessId, existingTx.productId) : null,
+      customer: existingTx.customerId
+        ? await getCustomer(businessId, existingTx.customerId)
+        : null,
       summary,
     };
   }
 
-  const baseDraft = message.proposedAction as unknown as ProposedTransactionDraft;
+  if (message.actionStatus === "CONFIRMED") {
+    const summary = await getFinancialSummary(businessId, "month");
+    return {
+      message: mapAiMessageDto(message),
+      transaction: null,
+      product: null,
+      customer: null,
+      summary,
+    };
+  }
+
+  const draft = message.proposedAction as unknown as ProposedActionDraft;
+
+  if (draft.kind === "STOCK") {
+    const stockDraft = draft as ProposedStockDraft;
+    const product = await findOrCreateProductByName(businessId, stockDraft.productName);
+    const updatedProduct = await adjustStock(businessId, product.id, userId, {
+      quantityDelta: stockDraft.quantityDelta,
+      reason: stockDraft.reason,
+      note: stockDraft.note,
+    });
+    const updatedMsg = await prisma.aiMessage.update({
+      where: { id: message.id },
+      data: { actionStatus: "CONFIRMED" },
+    });
+    return {
+      message: mapAiMessageDto(updatedMsg),
+      transaction: null,
+      product: updatedProduct,
+      customer: null,
+      summary: await getFinancialSummary(businessId, "month"),
+    };
+  }
+
+  if (draft.kind === "CUSTOMER_PAYMENT") {
+    const payDraft = draft as ProposedCustomerPaymentDraft;
+    const customer = await findCustomerByName(businessId, payDraft.customerName);
+    if (!customer) {
+      throw new AppError(404, "CUSTOMER_NOT_FOUND", "No customer with that name was found");
+    }
+    const detail = await recordCustomerPayment(businessId, customer.id, {
+      amount: payDraft.amount,
+      paymentMethod: payDraft.paymentMethod,
+      note: payDraft.note,
+      idempotencyKey: input.idempotencyKey,
+    });
+    const updatedMsg = await prisma.aiMessage.update({
+      where: { id: message.id },
+      data: { actionStatus: "CONFIRMED" },
+    });
+    return {
+      message: mapAiMessageDto(updatedMsg),
+      transaction: null,
+      product: null,
+      customer: detail,
+      summary: await getFinancialSummary(businessId, "month"),
+    };
+  }
+
+  const baseDraft = draft as ProposedTransactionDraft;
   const merged: ProposedTransactionDraft = {
     ...baseDraft,
     ...(input.overrides ?? {}),
+    kind: "TRANSACTION",
     currency: "ETB",
   };
+
+  let productId: string | null = null;
+  if (merged.productName) {
+    const product = await findProductByName(businessId, merged.productName);
+    productId = product?.id ?? null;
+  }
 
   const createdTx = await createTransaction(businessId, userId, {
     type: merged.type,
@@ -636,7 +887,9 @@ export async function confirmProposedAction(
     amount: Number(merged.amount),
     description: merged.description,
     paymentMethod: merged.paymentMethod,
-    counterpartyName: merged.counterpartyName,
+    counterpartyName: merged.counterpartyName ?? merged.customerName ?? null,
+    productId,
+    quantity: merged.quantity ?? null,
     transactionDate: merged.transactionDate,
     source: message.modality === "VOICE" ? "VOICE" : "CHAT",
     idempotencyKey: input.idempotencyKey,
@@ -656,6 +909,8 @@ export async function confirmProposedAction(
   return {
     message: mapAiMessageDto(updatedMsg),
     transaction: createdTx,
+    product: createdTx.productId ? await getProduct(businessId, createdTx.productId) : null,
+    customer: createdTx.customerId ? await getCustomer(businessId, createdTx.customerId) : null,
     summary,
   };
 }

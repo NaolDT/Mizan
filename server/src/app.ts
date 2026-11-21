@@ -7,6 +7,8 @@ import { prisma } from "./config/prisma.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
+import { customersRouter } from "./modules/customers/customers.routes.js";
+import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { businessRouter } from "./modules/business/business.routes.js";
 import { rewardsRouter } from "./modules/rewards/rewards.routes.js";
@@ -70,6 +72,8 @@ export function createApp() {
   app.use("/api/v1/voice", voiceRouter);
   app.use("/api/v1/subscription", subscriptionRouter);
   app.use("/api/v1/rewards", rewardsRouter);
+  app.use("/api/v1/customers", customersRouter);
+  app.use("/api/v1/inventory", inventoryRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,8 +1,11 @@
 import { Prisma } from "@prisma/client";
 import type {
+  BusinessInsightsDto,
   CategoryBreakdownItem,
   DailyCashFlowPoint,
   FinancialSummaryDto,
+  InsightItemDto,
+  LanguageCode,
   TransactionCategory,
   TransactionDto,
   TransactionType,
@@ -13,6 +16,8 @@ import {
   formatEatIsoTimestamp,
   getEatDateWindow,
 } from "../../utils/eatDate.js";
+import { listLowStock } from "../inventory/inventory.service.js";
+import { outstandingTotals } from "../customers/customers.service.js";
 import { mapTransactionDto } from "../transactions/transaction.service.js";
 
 function toNumber2(dec: Prisma.Decimal): number {
@@ -39,7 +44,7 @@ export async function getFinancialSummary(
   const todayWindow = getEatDateWindow("today", now);
   const periodWindow = getEatDateWindow(range, now);
 
-  const [todayRows, periodRows, prevPeriodRows, creditRows] = await Promise.all([
+  const [todayRows, periodRows, prevPeriodRows, creditRows, customerOutstanding] = await Promise.all([
     prisma.transaction.findMany({
       where: {
         businessId,
@@ -91,9 +96,11 @@ export async function getFinancialSummary(
         status: "COMPLETED",
         type: "INCOME",
         paymentMethod: "CREDIT",
+        customerId: null,
       },
       _sum: { amount: true },
     }),
+    outstandingTotals(businessId),
   ]);
 
   let todayIncome = new Prisma.Decimal(0);
@@ -210,7 +217,8 @@ export async function getFinancialSummary(
   const operatingExpensesExclInventory = periodExpense.minus(inventoryPurchases);
   const operatingProfitExclInventory = periodIncome.minus(operatingExpensesExclInventory);
   const netCashFlow = periodIncome.minus(periodExpense);
-  const creditReceivableTotal = creditRows._sum.amount ?? new Prisma.Decimal(0);
+  const unlinkedCredit = creditRows._sum.amount ?? new Prisma.Decimal(0);
+  const creditReceivableTotal = customerOutstanding.outstandingTotal.plus(unlinkedCredit);
 
   return {
     currency: "ETB",
@@ -250,12 +258,14 @@ export interface AiBusinessContextSnapshot {
   weekSummary: FinancialSummaryDto["period"];
   monthSummary: FinancialSummaryDto;
   recentTransactions: TransactionDto[];
+  products: Array<{ name: string; quantityOnHand: number; unit: string; isLowStock: boolean }>;
+  customersOwing: Array<{ name: string; outstandingBalance: number }>;
 }
 
 export async function buildAiContextSnapshot(
   businessId: string
 ): Promise<AiBusinessContextSnapshot> {
-  const [business, weekSummary, monthSummary, recentRows] = await Promise.all([
+  const [business, weekSummary, monthSummary, recentRows, products, customers] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: { name: true, category: true, location: true },
@@ -267,7 +277,32 @@ export async function buildAiContextSnapshot(
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
       take: 8,
     }),
+    prisma.product.findMany({
+      where: { businessId },
+      orderBy: { name: "asc" },
+      take: 20,
+      select: { name: true, quantityOnHand: true, unit: true, lowStockThreshold: true },
+    }),
+    prisma.customer.findMany({
+      where: { businessId },
+      orderBy: { name: "asc" },
+      take: 20,
+      select: { id: true, name: true },
+    }),
   ]);
+
+  const customerBalances = await Promise.all(
+    customers.map(async (c) => {
+      const sum = await prisma.customerLedger.aggregate({
+        where: { customerId: c.id },
+        _sum: { amount: true },
+      });
+      return {
+        name: c.name,
+        outstandingBalance: Number((sum._sum.amount ?? new Prisma.Decimal(0)).toFixed(2)),
+      };
+    })
+  );
 
   return {
     business: {
@@ -281,5 +316,218 @@ export async function buildAiContextSnapshot(
     weekSummary: weekSummary.period,
     monthSummary,
     recentTransactions: recentRows.map(mapTransactionDto),
+    products: products.map((p) => ({
+      name: p.name,
+      quantityOnHand: Number(p.quantityOnHand.toFixed(2)),
+      unit: p.unit,
+      isLowStock: p.lowStockThreshold.gt(0) && p.quantityOnHand.lte(p.lowStockThreshold),
+    })),
+    customersOwing: customerBalances.filter((c) => c.outstandingBalance > 0),
+  };
+}
+
+function insightCopy(
+  language: LanguageCode,
+  id: string,
+  vars: Record<string, string>
+): { title: string; body: string } {
+  const fill = (template: string) =>
+    Object.entries(vars).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template);
+
+  const copies: Record<
+    string,
+    Record<LanguageCode, { title: string; body: string }>
+  > = {
+    "need-more-activity": {
+      en: {
+        title: "Need more activity",
+        body: "Record a few more sales and expenses so Mizan can describe how the business is doing.",
+      },
+      am: {
+        title: "ተጨማሪ እንቅስቃሴ ያስፈልጋል",
+        body: "ንግድዎ እንዴት እንደሚሄድ ለመግለጽ ጥቂት ሽያጭና ወጪዎችን ይመዝግቡ።",
+      },
+      om: {
+        title: "Sochiin dabalataa barbaachisa",
+        body: "Mizan akka daldala kee ibsuuf gurgurtaa fi baasii muraasa galmeessi.",
+      },
+    },
+    "income-down": {
+      en: {
+        title: "Income is down",
+        body: "Recorded income is {pct}% lower than the previous period.",
+      },
+      am: {
+        title: "ገቢ ቀንሷል",
+        body: "የተመዘገበ ገቢ ከቀድሞው ጊዜ {pct}% ያነሰ ነው።",
+      },
+      om: {
+        title: "Galiin gadi bu'eera",
+        body: "Galiin galmaa'e yeroo darban irra {pct}% gadi aana.",
+      },
+    },
+    "income-up": {
+      en: {
+        title: "Income is up",
+        body: "Recorded income is {pct}% higher than the previous period.",
+      },
+      am: {
+        title: "ገቢ ጨምሯል",
+        body: "የተመዘገበ ገቢ ከቀድሞው ጊዜ {pct}% ይበልጣል።",
+      },
+      om: {
+        title: "Galiin ol ka'eera",
+        body: "Galiin galmaa'e yeroo darban irra {pct}% ol aana.",
+      },
+    },
+    "expenses-up": {
+      en: {
+        title: "Expenses increased",
+        body: "Recorded expenses are {pct}% higher than the previous period.",
+      },
+      am: {
+        title: "ወጪ ጨምሯል",
+        body: "የተመዘገበ ወጪ ከቀድሞው ጊዜ {pct}% ይበልጣል።",
+      },
+      om: {
+        title: "Baasiin dabaleera",
+        body: "Baasiin galmaa'e yeroo darban irra {pct}% ol aana.",
+      },
+    },
+    "expenses-over-income": {
+      en: {
+        title: "More expenses than income",
+        body: "This period's recorded expenses are higher than recorded income.",
+      },
+      am: {
+        title: "ወጪ ከገቢ በላይ ነው",
+        body: "በዚህ ጊዜ የተመዘገበ ወጪ ከተመዘገበ ገቢ ይበልጣል።",
+      },
+      om: {
+        title: "Baasiin galii ol aana",
+        body: "Yeroo kana baasiin galmaa'e galii galmaa'e ol aana.",
+      },
+    },
+    "credit-outstanding": {
+      en: {
+        title: "Money still owed to you",
+        body: "{count} customer(s) owe a total of {amount} ETB.",
+      },
+      am: {
+        title: "የሚቀረዎት ገንዘብ አለ",
+        body: "{count} ደንበኛ በድምሩ {amount} ETB ይቀሩዎታል።",
+      },
+      om: {
+        title: "Maallaqa si hafaa jira",
+        body: "Maamiltoota {count} waliigala {amount} ETB si hafaa.",
+      },
+    },
+    "low-stock": {
+      en: {
+        title: "Low stock",
+        body: "{count} products are low: {names}.",
+      },
+      am: {
+        title: "ዝቅተኛ ክምችት",
+        body: "{count} እቃ ዝቅተኛ ነው፦ {names}።",
+      },
+      om: {
+        title: "Kuufama gadi aanaa",
+        body: "Meeshaaleen {count} gadi aanaa: {names}.",
+      },
+    },
+    steady: {
+      en: {
+        title: "No warnings right now",
+        body: "Income, expenses and stock look steady compared with the previous period.",
+      },
+      am: {
+        title: "አሁን ማስጠንቀቂያ የለም",
+        body: "ገቢ፣ ወጪ እና ክምችት ከቀድሞው ጊዜ ጋር ሲነፃፀሩ የተረጋጉ ናቸው።",
+      },
+      om: {
+        title: "Ammaaf akeekkachiisni hin jiru",
+        body: "Galii, baasii fi kuufamni yeroo darban wajjin wal bira qabamee tasgabbaya.",
+      },
+    },
+  };
+
+  const entry = copies[id]?.[language] ?? copies[id]?.en;
+  if (!entry) return { title: id, body: "" };
+  return { title: fill(entry.title), body: fill(entry.body) };
+}
+
+/** Insights are computed from recorded data only — never invented by the LLM. */
+export async function getBusinessInsights(
+  businessId: string,
+  range: "today" | "week" | "month" = "month",
+  language: LanguageCode = "en"
+): Promise<BusinessInsightsDto> {
+  const [summary, lowStock, outstanding] = await Promise.all([
+    getFinancialSummary(businessId, range),
+    listLowStock(businessId),
+    outstandingTotals(businessId),
+  ]);
+
+  const items: InsightItemDto[] = [];
+  const txCount = summary.period.transactionCount;
+
+  const push = (id: string, severity: InsightItemDto["severity"], vars: Record<string, string> = {}) => {
+    const copy = insightCopy(language, id, vars);
+    items.push({ id, severity, title: copy.title, body: copy.body });
+  };
+
+  if (txCount < 3) {
+    push("need-more-activity", "info");
+  }
+
+  if (summary.period.vsPreviousIncomePct != null && summary.period.vsPreviousIncomePct <= -15) {
+    push("income-down", "warning", {
+      pct: Math.abs(summary.period.vsPreviousIncomePct).toFixed(1),
+    });
+  } else if (summary.period.vsPreviousIncomePct != null && summary.period.vsPreviousIncomePct >= 15) {
+    push("income-up", "info", {
+      pct: summary.period.vsPreviousIncomePct.toFixed(1),
+    });
+  }
+
+  if (summary.period.vsPreviousExpensePct != null && summary.period.vsPreviousExpensePct >= 20) {
+    push("expenses-up", "warning", {
+      pct: summary.period.vsPreviousExpensePct.toFixed(1),
+    });
+  }
+
+  if (txCount >= 3 && summary.period.expense > summary.period.income) {
+    push("expenses-over-income", "warning");
+  }
+
+  if (outstanding.outstandingTotal.gt(0)) {
+    push("credit-outstanding", "warning", {
+      count: String(outstanding.customersOwingCount),
+      amount: Number(outstanding.outstandingTotal.toFixed(2)).toLocaleString("en-US"),
+    });
+  }
+
+  if (lowStock.length > 0) {
+    push("low-stock", "warning", {
+      count: String(lowStock.length),
+      names: lowStock
+        .slice(0, 3)
+        .map((p) => p.name)
+        .join(", "),
+    });
+  }
+
+  if (items.length === 0 && txCount >= 3) {
+    push("steady", "info");
+  }
+
+  return {
+    generatedAtEat: formatEatIsoTimestamp(),
+    range,
+    items,
+    lowStockCount: lowStock.length,
+    customersOwingCount: outstanding.customersOwingCount,
+    outstandingTotal: Number(outstanding.outstandingTotal.toFixed(2)),
   };
 }

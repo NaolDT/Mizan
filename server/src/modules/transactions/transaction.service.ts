@@ -11,6 +11,15 @@ import type {
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
 import { getEatDateWindow } from "../../utils/eatDate.js";
+import {
+  findOrCreateCustomerByName,
+  recordCreditSaleForCustomer,
+  reverseCreditSaleForTransaction,
+} from "../customers/customers.service.js";
+import {
+  adjustStock,
+  reverseStockForTransaction,
+} from "../inventory/inventory.service.js";
 import { evaluateRewardsForBusiness } from "../rewards/rewards.service.js";
 
 const INCOME_CATEGORIES = new Set<TransactionCategory>([
@@ -52,6 +61,9 @@ export function mapTransactionDto(tx: Transaction): TransactionDto {
     description: tx.description,
     paymentMethod: tx.paymentMethod,
     counterpartyName: tx.counterpartyName,
+    customerId: tx.customerId,
+    productId: tx.productId,
+    quantity: tx.quantity == null ? null : Number(tx.quantity.toFixed(2)),
     transactionDate: tx.transactionDate.toISOString(),
     source: tx.source,
     status: tx.status,
@@ -138,6 +150,33 @@ export async function createTransaction(
   const safeCategory = coerceCategoryForType(input.type, input.category);
   const decimalAmount = new Prisma.Decimal(input.amount.toFixed(2));
 
+  const paymentMethod = input.paymentMethod ?? "CASH";
+  const counterpartyName = input.counterpartyName?.trim() || null;
+  const qty =
+    input.quantity != null && Number.isFinite(input.quantity)
+      ? new Prisma.Decimal(input.quantity.toFixed(2))
+      : null;
+
+  if (input.productId && qty && qty.gt(0) && input.type === "INCOME") {
+    const product = await prisma.product.findFirst({
+      where: { id: input.productId, businessId },
+      select: { quantityOnHand: true, name: true, unit: true },
+    });
+    if (product && product.quantityOnHand.lt(qty)) {
+      throw new AppError(
+        409,
+        "INSUFFICIENT_STOCK",
+        `Not enough ${product.name} in stock`
+      );
+    }
+  }
+
+  let customerId = input.customerId ?? null;
+  if (!customerId && paymentMethod === "CREDIT" && counterpartyName) {
+    const customer = await findOrCreateCustomerByName(businessId, counterpartyName);
+    customerId = customer.id;
+  }
+
   const created = await prisma.transaction.create({
     data: {
       businessId,
@@ -147,8 +186,11 @@ export async function createTransaction(
       amount: decimalAmount,
       currency: "ETB",
       description: input.description.trim(),
-      paymentMethod: input.paymentMethod ?? "CASH",
-      counterpartyName: input.counterpartyName?.trim() || null,
+      paymentMethod,
+      counterpartyName,
+      customerId,
+      productId: input.productId ?? null,
+      quantity: qty,
       transactionDate: parsedDate,
       source: input.source ?? "MANUAL",
       idempotencyKey: normalizedKey,
@@ -156,7 +198,28 @@ export async function createTransaction(
     },
   });
 
-  // Rewards run after the ledger write and must never fail or slow a sale.
+  if (created.type === "INCOME" && created.paymentMethod === "CREDIT" && created.customerId) {
+    await recordCreditSaleForCustomer(
+      businessId,
+      created.customerId,
+      created.amount,
+      created.id,
+      created.description
+    );
+  }
+
+  if (created.productId && qty && !qty.eq(0)) {
+    const reason = created.type === "EXPENSE" ? "RESTOCK" : "SALE";
+    const delta = reason === "RESTOCK" ? Number(qty.toFixed(2)) : -Number(qty.toFixed(2));
+    await adjustStock(
+      businessId,
+      created.productId,
+      recordedById,
+      { quantityDelta: delta, reason, note: created.description },
+      created.id
+    );
+  }
+
   void evaluateRewardsForBusiness(businessId).catch((err) => {
     console.error("[rewards] evaluation failed:", err);
   });
@@ -234,6 +297,11 @@ export async function voidTransaction(
     where: { id: existing.id },
     data: { status: "VOIDED" },
   });
+
+  if (existing.paymentMethod === "CREDIT") {
+    await reverseCreditSaleForTransaction(businessId, existing.id);
+  }
+  await reverseStockForTransaction(businessId, existing.id, existing.recordedById);
 
   return mapTransactionDto(voided);
 }

@@ -35,6 +35,9 @@ import { TransactionModal } from "../components/TransactionModal";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { MizanLogoMark } from "../components/brand/MizanLogo";
+import { CustomersPanel } from "../components/CustomersPanel";
+import { InsightsStrip } from "../components/InsightsStrip";
+import { InventoryPanel } from "../components/InventoryPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
@@ -50,9 +53,9 @@ export function DashboardPage() {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "ledger" | "rewards">(
-    "dashboard"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "ledger" | "inventory" | "customers" | "rewards"
+  >("dashboard");
   const refreshBilling = useRefreshBilling();
   const rewardsText = REWARDS_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
@@ -101,7 +104,9 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      // Points are granted a moment after the write, so check again shortly.
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
       window.setTimeout(refreshBilling, 1500);
     },
   });
@@ -121,6 +126,9 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
     },
   });
 
@@ -132,6 +140,9 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
     },
   });
 
@@ -181,6 +192,28 @@ export function DashboardPage() {
                   }`}
                 >
                   {t.ledgerTab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("inventory")}
+                  className={`font-semibold ${
+                    activeTab === "inventory"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t.inventoryTab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("customers")}
+                  className={`font-semibold ${
+                    activeTab === "customers"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t.customersTab}
                 </button>
                 <button
                   type="button"
@@ -305,6 +338,8 @@ export function DashboardPage() {
 
         {activeTab === "dashboard" && (
           <>
+            <InsightsStrip range={range} />
+
             {/* Range Selector */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-700">
@@ -483,9 +518,13 @@ export function DashboardPage() {
         )}
 
         {activeTab === "rewards" && <RewardsPanel />}
+        {activeTab === "inventory" && <InventoryPanel />}
+        {activeTab === "customers" && <CustomersPanel />}
 
         {/* Transactions Feed / Ledger */}
-        {activeTab !== "rewards" && (
+        {activeTab !== "rewards" &&
+          activeTab !== "inventory" &&
+          activeTab !== "customers" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-900">

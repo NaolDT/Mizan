@@ -105,6 +105,18 @@ enum RewardEventType {
   REDEEM_STARTER_WEEK
 }
 
+enum StockMovementReason {
+  RESTOCK
+  SALE
+  ADJUSTMENT
+}
+
+enum CustomerLedgerType {
+  CREDIT_SALE
+  PAYMENT
+  REVERSAL
+}
+
 model User {
   id                String           @id @default(uuid()) @db.Uuid
   name              String           @db.VarChar(120)
@@ -124,6 +136,7 @@ model User {
   referralsMade     Referral[]       @relation("ReferrerRelation")
   referralReceived  Referral?        @relation("ReferredRelation")
   rewardEntries     RewardLedger[]
+  stockMovements    StockMovement[]
 
   @@map("users")
 }
@@ -144,6 +157,10 @@ model Business {
   transactions      Transaction[]
   conversations     AiConversation[]
   messages          AiMessage[]
+  customers         Customer[]
+  products          Product[]
+  stockMovements    StockMovement[]
+  customerLedger    CustomerLedger[]
 
   voiceRepliesUsed    Int       @default(0) @map("voice_replies_used")
   voiceBonusReplies   Int       @default(0) @map("voice_bonus_replies")
@@ -166,6 +183,9 @@ model Transaction {
   description      String              @db.VarChar(280)
   paymentMethod    PaymentMethod       @default(CASH) @map("payment_method")
   counterpartyName String?             @map("counterparty_name") @db.VarChar(120)
+  customerId       String?             @map("customer_id") @db.Uuid
+  productId        String?             @map("product_id") @db.Uuid
+  quantity         Decimal?            @db.Decimal(12, 2)
   transactionDate  DateTime            @default(now()) @map("transaction_date") @db.Timestamptz(6)
   source           TransactionSource   @default(MANUAL)
   idempotencyKey   String              @map("idempotency_key") @db.VarChar(80)
@@ -175,7 +195,11 @@ model Transaction {
 
   business         Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
   recordedBy       User                @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  product          Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
   linkedMessages   AiMessage[]
+  stockMovements   StockMovement[]
+  customerLedger   CustomerLedger[]
 
   @@unique([businessId, idempotencyKey])
   @@index([businessId, status, transactionDate(sort: Desc)])
@@ -258,4 +282,88 @@ model RewardLedger {
   @@unique([userId, sourceKey])
   @@index([userId, createdAt(sort: Desc)])
   @@map("reward_ledger")
+}
+
+model Customer {
+  id          String           @id @default(uuid()) @db.Uuid
+  businessId  String           @map("business_id") @db.Uuid
+  name        String           @db.VarChar(120)
+  nameKey     String           @map("name_key") @db.VarChar(120)
+  phone       String?          @db.VarChar(24)
+  notes       String?          @db.VarChar(280)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  ledger      CustomerLedger[]
+
+  @@unique([businessId, nameKey])
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("customers")
+}
+
+model CustomerLedger {
+  id            String             @id @default(uuid()) @db.Uuid
+  businessId    String             @map("business_id") @db.Uuid
+  customerId    String             @map("customer_id") @db.Uuid
+  type          CustomerLedgerType
+  amount        Decimal            @db.Decimal(12, 2)
+  note          String?            @db.VarChar(200)
+  sourceKey     String?            @map("source_key") @db.VarChar(80)
+  transactionId String?            @map("transaction_id") @db.Uuid
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business      Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transaction   Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, sourceKey])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([businessId, type])
+  @@map("customer_ledger")
+}
+
+model Product {
+  id                 String          @id @default(uuid()) @db.Uuid
+  businessId         String          @map("business_id") @db.Uuid
+  name               String          @db.VarChar(120)
+  nameKey            String          @map("name_key") @db.VarChar(120)
+  unit               String          @default("pcs") @db.VarChar(24)
+  quantityOnHand     Decimal         @default(0) @map("quantity_on_hand") @db.Decimal(12, 2)
+  lowStockThreshold  Decimal         @default(0) @map("low_stock_threshold") @db.Decimal(12, 2)
+  sellingPrice       Decimal?        @map("selling_price") @db.Decimal(12, 2)
+  costPrice          Decimal?        @map("cost_price") @db.Decimal(12, 2)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business           Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  movements          StockMovement[]
+  transactions       Transaction[]
+
+  @@unique([businessId, nameKey])
+  @@index([businessId, name])
+  @@map("products")
+}
+
+model StockMovement {
+  id             String               @id @default(uuid()) @db.Uuid
+  businessId     String               @map("business_id") @db.Uuid
+  productId      String               @map("product_id") @db.Uuid
+  recordedById   String               @map("recorded_by_id") @db.Uuid
+  quantityDelta  Decimal              @map("quantity_delta") @db.Decimal(12, 2)
+  quantityAfter  Decimal              @map("quantity_after") @db.Decimal(12, 2)
+  reason         StockMovementReason
+  note           String?              @db.VarChar(200)
+  transactionId  String?              @map("transaction_id") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  recordedBy     User                 @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  transaction    Transaction?         @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("stock_movements")
 }

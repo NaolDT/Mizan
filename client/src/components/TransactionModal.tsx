@@ -1,14 +1,18 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import type {
   CreateTransactionRequest,
   PaymentMethod,
+  ProductDto,
   TransactionCategory,
   TransactionDto,
   TransactionType,
   UpdateTransactionRequest,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
+import { SHOP_TEXT } from "../i18n/shopText";
+import { apiRequest } from "../lib/api";
 import { todayIsoDate } from "../lib/format";
 
 const INCOME_CATS: TransactionCategory[] = [
@@ -45,8 +49,13 @@ export function TransactionModal({
   onCreate,
   onUpdate,
 }: TransactionModalProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const shop = SHOP_TEXT[language];
   const isEditing = Boolean(editingTransaction);
+  const productsQuery = useQuery({
+    queryKey: ["products"],
+    queryFn: () => apiRequest<ProductDto[]>("/inventory"),
+  });
 
   const [type, setType] = useState<TransactionType>(
     editingTransaction?.type ?? initialType
@@ -76,6 +85,10 @@ export function TransactionModal({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [productId, setProductId] = useState(editingTransaction?.productId ?? "");
+  const [quantity, setQuantity] = useState(
+    editingTransaction?.quantity != null ? String(editingTransaction.quantity) : ""
+  );
 
   const handleTypeSwitch = (nextType: TransactionType) => {
     setType(nextType);
@@ -110,6 +123,8 @@ export function TransactionModal({
           description: description.trim() || t.categories[category],
           paymentMethod,
           counterpartyName: counterpartyName.trim() || null,
+          productId: productId || null,
+          quantity: quantity ? Number(quantity) : null,
           transactionDate: dateStr,
           source: "MANUAL",
           idempotencyKey: `manual-${crypto.randomUUID()}`,
@@ -235,6 +250,41 @@ export function TransactionModal({
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-600 focus:outline-none"
             />
           </div>
+
+          {!isEditing && (productsQuery.data?.length ?? 0) > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">
+                  {shop.productLabel}
+                </label>
+                <select
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 focus:border-emerald-600 focus:outline-none"
+                >
+                  <option value="">{shop.noProduct}</option>
+                  {(productsQuery.data ?? []).map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} ({product.quantityOnHand} {product.unit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700">
+                  {shop.qtySoldLabel}
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-emerald-600 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

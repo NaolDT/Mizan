@@ -19,10 +19,14 @@ import type {
   ConversationDto,
   LanguageCode,
   PaymentMethod,
+  ProposedActionDraft,
+  ProposedCustomerPaymentDraft,
+  ProposedStockDraft,
   ProposedTransactionDraft,
   TransactionCategory,
   TtsResponse,
 } from "@mizan/shared";
+import { SHOP_TEXT } from "../i18n/shopText";
 import { useLanguage } from "../context/LanguageContext";
 import {
   REWARDS_KEY,
@@ -52,37 +56,49 @@ const ALL_CATEGORIES: TransactionCategory[] = [
 
 const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "TELEBIRR", "BANK", "CREDIT"];
 
+function isStockDraft(draft: ProposedActionDraft): draft is ProposedStockDraft {
+  return draft.kind === "STOCK";
+}
+function isPaymentDraft(draft: ProposedActionDraft): draft is ProposedCustomerPaymentDraft {
+  return draft.kind === "CUSTOMER_PAYMENT";
+}
+function isTxDraft(draft: ProposedActionDraft): draft is ProposedTransactionDraft {
+  return !isStockDraft(draft) && !isPaymentDraft(draft);
+}
+
 interface PendingActionCardProps {
   message: AiMessageDto;
   onConfirmed: () => void;
 }
 
 function PendingActionCard({ message, onConfirmed }: PendingActionCardProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const shop = SHOP_TEXT[language];
   const queryClient = useQueryClient();
   const draft = message.proposedAction;
+  const txDraft = draft && isTxDraft(draft) ? draft : null;
 
   const [isEditing, setIsEditing] = useState(false);
-  const [amount, setAmount] = useState(String(draft?.amount ?? ""));
+  const [amount, setAmount] = useState(String(txDraft?.amount ?? ""));
   const [category, setCategory] = useState<TransactionCategory>(
-    draft?.category ?? "SALES"
+    txDraft?.category ?? "SALES"
   );
-  const [description, setDescription] = useState(draft?.description ?? "");
+  const [description, setDescription] = useState(txDraft?.description ?? "");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    draft?.paymentMethod ?? "CASH"
+    txDraft?.paymentMethod ?? "CASH"
   );
   const [counterpartyName, setCounterpartyName] = useState(
-    draft?.counterpartyName ?? ""
+    txDraft?.counterpartyName ?? ""
   );
 
   const confirmMutation = useMutation({
     mutationFn: () => {
-      const overrides: Partial<Omit<ProposedTransactionDraft, "currency">> =
-        isEditing
+      const overrides: Partial<Omit<ProposedTransactionDraft, "currency" | "kind">> =
+        isEditing && txDraft
           ? {
               amount: Number(amount),
               category,
-              description: description.trim() || draft?.description,
+              description: description.trim() || txDraft.description,
               paymentMethod,
               counterpartyName: counterpartyName.trim() || null,
             }
@@ -104,7 +120,10 @@ function PendingActionCard({ message, onConfirmed }: PendingActionCardProps) {
       queryClient.invalidateQueries({ queryKey: ["ai-conversation"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      // Reward points are granted a moment after the ledger write.
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
       window.setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: REWARDS_KEY });
         void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });
@@ -125,6 +144,51 @@ function PendingActionCard({ message, onConfirmed }: PendingActionCardProps) {
   });
 
   if (!draft) return null;
+
+  if (isStockDraft(draft) || isPaymentDraft(draft)) {
+    const title = isStockDraft(draft) ? shop.confirmStock : shop.confirmPayment;
+    const summary = isStockDraft(draft)
+      ? `${draft.productName}: ${draft.quantityDelta > 0 ? "+" : ""}${draft.quantityDelta}`
+      : `${draft.customerName}: ${formatEtb(draft.amount)}`;
+    if (message.actionStatus === "CONFIRMED") {
+      return (
+        <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          {summary} · {t.confirmedBadge}
+        </div>
+      );
+    }
+    if (message.actionStatus === "CANCELLED") {
+      return (
+        <div className="mt-2.5 rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs text-slate-500">
+          {summary} · {t.cancelledBadge}
+        </div>
+      );
+    }
+    return (
+      <div className="mt-3 rounded-xl border border-emerald-300 bg-white p-3 text-slate-900">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{title}</p>
+        <p className="mt-1 text-sm font-bold">{summary}</p>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => confirmMutation.mutate()}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"
+          >
+            {t.confirmAction}
+          </button>
+          <button
+            type="button"
+            onClick={() => cancelMutation.mutate()}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
+          >
+            {t.cancelAction}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isTxDraft(draft)) return null;
 
   const isIncome = draft.type === "INCOME";
 

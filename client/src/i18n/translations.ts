@@ -25,6 +25,8 @@ export interface UiDictionary {
   signOut: string;
   dashboardTab: string;
   ledgerTab: string;
+  inventoryTab: string;
+  customersTab: string;
   shopSettings: string;
   todayIncome: string;
   todayExpenses: string;
@@ -103,6 +105,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     signOut: "ውጣ",
     dashboardTab: "ዳሽቦርድ",
     ledgerTab: "የሂሳብ መዝገብ",
+    inventoryTab: "እቃዎች",
+    customersTab: "ደንበኞች",
     shopSettings: "የሱቅ መቼት",
     todayIncome: "የዛሬ ገቢ",
     todayExpenses: "የዛሬ ወጪ",
@@ -157,7 +161,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
       "ዛሬ ከሽያጭ 3,500 ብር አግኝቻለሁ",
       "ለትራንስፖርት 450 ብር አውጥቻለሁ",
       "የዚህ ወር የተጣራ ትርፌ ስንት ነው?",
-      "ትልቁ ወጪዬ ምንድን ነው? ምን ላሻሽል?",
+      "ምን ያህል ዘይት ቀርቷል?",
+      "አበበ ስንት ብር ይቀረኛል?",
     ],
     categories: {
       SALES: "ሽያጭ",
@@ -209,6 +214,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     signOut: "Ba'i",
     dashboardTab: "Daashboordii",
     ledgerTab: "Galmee Herregaa",
+    inventoryTab: "Meeshaalee",
+    customersTab: "Maamiltoota",
     shopSettings: "Qindaa'ina Suuqii",
     todayIncome: "Galii Har'aa",
     todayExpenses: "Baasii Har'aa",
@@ -263,7 +270,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
       "Har'a gurgurtaarraa qarshii 3,500 argadheera",
       "Geejjibaaf qarshii 450 baaseera",
       "Bu'aan koo ji'a kanaa meeqa?",
-      "Baasiin koo guddaan maali? Maal fooyyessuu qaba?",
+      "Zayitii meeqatu hafe?",
+      "Abebe birrii meeqa na hafaa?",
     ],
     categories: {
       SALES: "Gurgurtaa",
@@ -315,6 +323,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     signOut: "Sign Out",
     dashboardTab: "Dashboard",
     ledgerTab: "Transactions",
+    inventoryTab: "Inventory",
+    customersTab: "Customers",
     shopSettings: "Shop Settings",
     todayIncome: "Today's Income",
     todayExpenses: "Today's Expenses",
@@ -369,7 +379,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
       "I earned 3,500 birr from sales today",
       "I spent 450 birr on transportation",
       "What is my net profit this month?",
-      "What are my biggest expenses and what should I improve?",
+      "How many bottles of oil do I have?",
+      "How much does Abebe owe me?",
     ],
     categories: {
       SALES: "Product Sales",

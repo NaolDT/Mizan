@@ -63,7 +63,17 @@ export type SupportedAiIntent =
   | "list_recent_transactions"
   | "business_advice"
   | "general_greeting"
-  | "clarification_needed";
+  | "clarification_needed"
+  | "query_inventory"
+  | "adjust_stock"
+  | "query_customer_balance"
+  | "record_customer_payment";
+
+export type StockMovementReason = "RESTOCK" | "SALE" | "ADJUSTMENT";
+
+export type CustomerLedgerType = "CREDIT_SALE" | "PAYMENT" | "REVERSAL";
+
+export type InsightSeverity = "info" | "warning";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Standard API Envelopes
@@ -156,6 +166,9 @@ export interface TransactionDto {
   description: string;
   paymentMethod: PaymentMethod;
   counterpartyName: string | null;
+  customerId: string | null;
+  productId: string | null;
+  quantity: number | null;
   transactionDate: string; // ISO 8601
   source: TransactionSource;
   status: TransactionStatus;
@@ -169,6 +182,9 @@ export interface CreateTransactionRequest {
   description: string;
   paymentMethod?: PaymentMethod;
   counterpartyName?: string | null;
+  customerId?: string | null;
+  productId?: string | null;
+  quantity?: number | null;
   transactionDate?: string;
   source?: TransactionSource;
   idempotencyKey: string;
@@ -180,6 +196,9 @@ export interface UpdateTransactionRequest {
   description?: string;
   paymentMethod?: PaymentMethod;
   counterpartyName?: string | null;
+  customerId?: string | null;
+  productId?: string | null;
+  quantity?: number | null;
   transactionDate?: string;
 }
 
@@ -228,6 +247,7 @@ export interface FinancialSummaryDto {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ProposedTransactionDraft {
+  kind?: "TRANSACTION";
   type: TransactionType;
   category: TransactionCategory;
   amount: number;
@@ -235,8 +255,32 @@ export interface ProposedTransactionDraft {
   description: string;
   paymentMethod: PaymentMethod;
   counterpartyName: string | null;
+  customerName?: string | null;
+  productName?: string | null;
+  quantity?: number | null;
   transactionDate: string; // ISO date or YYYY-MM-DD
 }
+
+export interface ProposedStockDraft {
+  kind: "STOCK";
+  productName: string;
+  quantityDelta: number;
+  reason: StockMovementReason;
+  note: string;
+}
+
+export interface ProposedCustomerPaymentDraft {
+  kind: "CUSTOMER_PAYMENT";
+  customerName: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note: string;
+}
+
+export type ProposedActionDraft =
+  | ProposedTransactionDraft
+  | ProposedStockDraft
+  | ProposedCustomerPaymentDraft;
 
 export interface AiMessageDto {
   id: string;
@@ -248,7 +292,7 @@ export interface AiMessageDto {
   rawTranscript: string | null;
   intent: SupportedAiIntent | null;
   confidence: number | null;
-  proposedAction: ProposedTransactionDraft | null;
+  proposedAction: ProposedActionDraft | null;
   actionStatus: ActionStatus;
   linkedTransactionId: string | null;
   createdAt: string;
@@ -286,12 +330,14 @@ export interface VoiceTurnResponse extends AiTurnResponse {
 
 export interface ConfirmActionRequest {
   idempotencyKey: string;
-  overrides?: Partial<Omit<ProposedTransactionDraft, "currency">>;
+  overrides?: Partial<Omit<ProposedTransactionDraft, "currency" | "kind">>;
 }
 
 export interface ConfirmActionResponse {
   message: AiMessageDto;
-  transaction: TransactionDto;
+  transaction: TransactionDto | null;
+  product: ProductDto | null;
+  customer: CustomerDto | null;
   summary: FinancialSummaryDto;
 }
 
@@ -425,4 +471,112 @@ export interface RedeemRequest {
 export interface RedeemResponse {
   rewards: RewardSummaryDto;
   subscription: SubscriptionSummaryDto;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customers, Inventory & Insights DTOs
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CustomerDto {
+  id: string;
+  businessId: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  outstandingBalance: number;
+  createdAt: string;
+}
+
+export interface CustomerLedgerEntryDto {
+  id: string;
+  type: CustomerLedgerType;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CustomerDetailDto extends CustomerDto {
+  ledger: CustomerLedgerEntryDto[];
+}
+
+export interface CreateCustomerRequest {
+  name: string;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateCustomerRequest {
+  name?: string;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface RecordCustomerPaymentRequest {
+  amount: number;
+  paymentMethod?: PaymentMethod;
+  note?: string;
+  idempotencyKey: string;
+}
+
+export interface ProductDto {
+  id: string;
+  businessId: string;
+  name: string;
+  unit: string;
+  quantityOnHand: number;
+  lowStockThreshold: number;
+  sellingPrice: number | null;
+  costPrice: number | null;
+  isLowStock: boolean;
+  createdAt: string;
+}
+
+export interface StockMovementDto {
+  id: string;
+  productId: string;
+  productName: string;
+  quantityDelta: number;
+  quantityAfter: number;
+  reason: StockMovementReason;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CreateProductRequest {
+  name: string;
+  unit?: string;
+  quantityOnHand?: number;
+  lowStockThreshold?: number;
+  sellingPrice?: number | null;
+  costPrice?: number | null;
+}
+
+export interface UpdateProductRequest {
+  name?: string;
+  unit?: string;
+  lowStockThreshold?: number;
+  sellingPrice?: number | null;
+  costPrice?: number | null;
+}
+
+export interface AdjustStockRequest {
+  quantityDelta: number;
+  reason: StockMovementReason;
+  note?: string;
+}
+
+export interface InsightItemDto {
+  id: string;
+  severity: InsightSeverity;
+  title: string;
+  body: string;
+}
+
+export interface BusinessInsightsDto {
+  generatedAtEat: string;
+  range: Exclude<DateRangePreset, "all">;
+  items: InsightItemDto[];
+  lowStockCount: number;
+  customersOwingCount: number;
+  outstandingTotal: number;
 }
