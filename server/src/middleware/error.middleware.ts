@@ -32,6 +32,17 @@ export function errorHandler(
     return;
   }
 
+  // body-parser errors (malformed JSON, oversized body) are client mistakes, not server faults.
+  const parserType = (err as { type?: string } | null)?.type;
+  if (parserType === "entity.parse.failed") {
+    sendError(res, 400, "INVALID_JSON", "Request body is not valid JSON");
+    return;
+  }
+  if (parserType === "entity.too.large") {
+    sendError(res, 413, "PAYLOAD_TOO_LARGE", "Request body is too large");
+    return;
+  }
+
   console.error("[Unhandled Server Error]:", err);
   sendError(res, 500, "INTERNAL_SERVER_ERROR", "An unexpected server error occurred");
 }
