@@ -1,8 +1,9 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
-import { sendSuccess } from "../../utils/apiResponse.js";
+import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import {
   adjustStock,
   createProduct,
@@ -12,7 +13,9 @@ import {
   getProductImage,
   getProductProfitability,
   listMovements,
+  listPriceHistory,
   listProducts,
+  saveProductImage,
   updateProduct,
 } from "./inventory.service.js";
 
@@ -79,6 +82,48 @@ inventoryRouter.get("/profitability", async (req, res, next) => {
 inventoryRouter.get("/valuation", async (req, res, next) => {
   try {
     sendSuccess(res, await getInventoryValuation(req.tenant!.businessId));
+  } catch (err) {
+    next(err);
+  }
+});
+
+function paramId(req: { params: { id?: string | string[] } }): string {
+  const value = req.params.id;
+  return Array.isArray(value) ? value[0] : value ?? "";
+}
+
+inventoryRouter.get("/:id/price-history", async (req, res, next) => {
+  try {
+    sendSuccess(res, await listPriceHistory(req.tenant!.businessId, paramId(req)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 400 * 1024 },
+});
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/jpg"]);
+
+inventoryRouter.post("/:id/image", imageUpload.single("image"), async (req, res, next) => {
+  try {
+    if (!req.file?.buffer.length) {
+      throw new AppError(400, "IMAGE_REQUIRED", "Choose a product photo");
+    }
+    const mime = (req.file.mimetype || "image/jpeg").toLowerCase();
+    if (!ALLOWED_IMAGE_TYPES.has(mime)) {
+      throw new AppError(400, "UNSUPPORTED_IMAGE", "Use a JPEG, PNG or WebP photo");
+    }
+    sendSuccess(
+      res,
+      await saveProductImage(
+        req.tenant!.businessId,
+        paramId(req),
+        req.file.buffer,
+        mime === "image/jpg" ? "image/jpeg" : mime
+      )
+    );
   } catch (err) {
     next(err);
   }

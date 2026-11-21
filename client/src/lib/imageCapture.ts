@@ -19,22 +19,42 @@ export async function compressImageFile(file: File, maxEdge = 1280, quality = 0.
   });
 }
 
+type BarcodeDetectorCtor = new (opts: { formats: string[] }) => {
+  detect: (source: HTMLVideoElement | ImageBitmap | HTMLCanvasElement) => Promise<Array<{ rawValue?: string }>>;
+};
+
+function getBarcodeDetector(): BarcodeDetectorCtor | null {
+  return (
+    (
+      window as Window & {
+        BarcodeDetector?: BarcodeDetectorCtor;
+      }
+    ).BarcodeDetector ?? null
+  );
+}
+
+const BARCODE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"];
+
 export async function detectBarcodeFromBlob(blob: Blob): Promise<string | null> {
-  const Detector = (
-    window as Window & {
-      BarcodeDetector?: new (opts: { formats: string[] }) => {
-        detect: (source: ImageBitmap) => Promise<Array<{ rawValue?: string }>>;
-      };
-    }
-  ).BarcodeDetector;
+  const Detector = getBarcodeDetector();
   if (!Detector) return null;
   try {
-    const detector = new Detector({
-      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"],
-    });
+    const detector = new Detector({ formats: BARCODE_FORMATS });
     const bitmap = await createImageBitmap(blob);
     const codes = await detector.detect(bitmap);
     bitmap.close();
+    return codes[0]?.rawValue ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function detectBarcodeFromVideo(video: HTMLVideoElement): Promise<string | null> {
+  const Detector = getBarcodeDetector();
+  if (!Detector || video.readyState < 2) return null;
+  try {
+    const detector = new Detector({ formats: BARCODE_FORMATS });
+    const codes = await detector.detect(video);
     return codes[0]?.rawValue ?? null;
   } catch {
     return null;

@@ -179,7 +179,7 @@ const en: LandingCopy = {
   valueStrip: [
     "Built for Ethiopian businesses",
     "Amharic & Afaan Oromo support",
-    "Voice-first interaction",
+    "Voice, camera and text",
     "Simple financial management",
     "AI-powered business insights",
   ],
@@ -214,6 +214,11 @@ const en: LandingCopy = {
         label: "Voice recording",
         title: "Voice-Powered Financial Recording",
         body: "Record income and expenses with natural voice commands. Mizan understands what you said, shows you a clear entry, and records it once you confirm.",
+      },
+      {
+        label: "Camera capture",
+        title: "Photograph Products and Receipts",
+        body: "Point the camera at products or a supplier receipt. Mizan matches items to this shop's catalog and prices, then waits for you to review and confirm before anything is recorded.",
       },
       {
         label: "Local languages",
@@ -255,8 +260,8 @@ const en: LandingCopy = {
     steps: [
       { title: "Create Your Account", body: "Create your Mizan account and set up your business." },
       {
-        title: "Speak or Enter Your Transactions",
-        body: "Record your daily income and expenses using simple voice commands or text.",
+        title: "Speak, Photograph or Type",
+        body: "Record daily income and expenses with voice, a product photo, or text. You always review the entry before it is saved.",
       },
       {
         title: "Understand Your Business",
@@ -377,7 +382,7 @@ const en: LandingCopy = {
       },
       {
         q: "How can I record transactions?",
-        a: "You can record business transactions by typing, by chatting with the assistant, or by using voice where supported. Mizan shows you the entry first and records it only after you confirm.",
+        a: "You can record business transactions by typing, by chatting with the assistant, by using voice where supported, or by photographing products and receipts. Mizan shows you the entry first and records it only after you confirm.",
       },
       {
         q: "Is Mizan free?",
@@ -478,7 +483,7 @@ const am: LandingCopy = {
   valueStrip: [
     "ለኢትዮጵያ ንግዶች የተሠራ",
     "የአማርኛ እና የኦሮምኛ ድጋፍ",
-    "በድምፅ የሚመራ",
+    "ድምፅ፣ ካሜራ እና ጽሑፍ",
     "ቀላል የገንዘብ አስተዳደር",
     "በAI የሚሰጥ የንግድ ግንዛቤ",
   ],
@@ -513,6 +518,11 @@ const am: LandingCopy = {
         label: "የድምፅ ምዝገባ",
         title: "በድምፅ የሚደረግ የገንዘብ ምዝገባ",
         body: "ገቢና ወጪን በተፈጥሯዊ የድምፅ ትእዛዝ ይመዝግቡ። Mizan የተናገሩትን ተረድቶ ግልጽ ግቤት ያሳያል፤ ሲያረጋግጡ ይመዘግባል።",
+      },
+      {
+        label: "በካሜራ መቅረጽ",
+        title: "እቃዎችን እና ደረሰኞችን ፎቶ ያንሱ",
+        body: "ካሜራውን ወደ እቃ ወይም የአቅራቢ ደረሰኝ ያዙሩ። Mizan እቃዎቹን ከዚህ ሱቅ ካታሎግና ዋጋ ጋር ያገናኛል፤ ከመመዝገቡ በፊት እንዲገመግሙና እንዲያረጋግጡ ይጠብቃል።",
       },
       {
         label: "የአካባቢ ቋንቋዎች",
@@ -554,8 +564,8 @@ const am: LandingCopy = {
     steps: [
       { title: "መለያዎን ይፍጠሩ", body: "የ Mizan መለያዎን ይፍጠሩ እና ንግድዎን ያዘጋጁ።" },
       {
-        title: "ግብይቶችዎን ይናገሩ ወይም ያስገቡ",
-        body: "የዕለት ገቢና ወጪዎን በቀላል የድምፅ ትእዛዝ ወይም በጽሑፍ ይመዝግቡ።",
+        title: "ይናገሩ፣ ፎቶ ያንሱ ወይም ይጻፉ",
+        body: "የዕለት ገቢና ወጪን በድምፅ፣ በእቃ ፎቶ ወይም በጽሑፍ ይመዝግቡ። ከመቀመጡ በፊት ሁልጊዜ ግቤቱን ይገመግማሉ።",
       },
       {
         title: "ንግድዎን ይረዱ",
@@ -670,7 +680,7 @@ const am: LandingCopy = {
       },
       {
         q: "ግብይቶችን እንዴት መመዝገብ እችላለሁ?",
-        a: "ግብይቶችን በመጻፍ፣ ከረዳቱ ጋር በመወያየት ወይም በሚደገፍበት ቦታ በድምፅ መመዝገብ ይችላሉ። Mizan መጀመሪያ ግቤቱን ያሳያል፤ ከእርስዎ ማረጋገጫ በኋላ ብቻ ይመዘግባል።",
+        a: "ግብይቶችን በመጻፍ፣ ከረዳቱ ጋር በመወያየት፣ በሚደገፍበት ቦታ በድምፅ፣ ወይም እቃና ደረሰኝ በፎቶ መመዝገብ ይችላሉ። Mizan መጀመሪያ ግቤቱን ያሳያል፤ ከእርስዎ ማረጋገጫ በኋላ ብቻ ይመዘግባል።",
       },
       {
         q: "Mizan ነፃ ነው?",
@@ -771,7 +781,7 @@ const om: LandingCopy = {
   valueStrip: [
     "Daldalootaaf Itoophiyaaf kan hojjetame",
     "Deeggarsa Afaan Oromoo fi Amaaraa",
-    "Sagaleen kan geggeeffamu",
+    "Sagalee, kaameraa fi barreeffama",
     "Bulchiinsa maallaqaa salphaa",
     "Hubannoo daldalaa AI'n kennamu",
   ],
@@ -806,6 +816,11 @@ const om: LandingCopy = {
         label: "Galmee sagaleen",
         title: "Galmee maallaqaa sagaleen",
         body: "Galii fi baasii ajaja sagalee uumamaan galmeessi. Mizan waan jette hubatee galmee ifa ta'e si agarsiisa; yeroo mirkaneessitu galmeessa.",
+      },
+      {
+        label: "Suuraa kaameraa",
+        title: "Meeshaa fi risiitii suuraa kaasi",
+        body: "Kaameraa gara meeshaa ykn risiitii dhiyeessaa geessi. Mizan meeshaalee katalogii fi gatii suuqii kanaa wajjin wal-bira qaba; osoo hin galmaa'in dura ilaaltee mirkaneessuu ni eeggata.",
       },
       {
         label: "Afaan naannoo",
@@ -847,8 +862,8 @@ const om: LandingCopy = {
     steps: [
       { title: "Akkaawuntii kee uumi", body: "Akkaawuntii Mizan kee uumii daldala kee qopheessi." },
       {
-        title: "Daldala kee dubbadhu ykn galchi",
-        body: "Galii fi baasii guyyaa guyyaa ajaja sagalee salphaa ykn barreeffamaan galmeessi.",
+        title: "Dubbadhu, suuraa kaasi ykn barreessi",
+        body: "Galii fi baasii guyyaa sagalee, suuraa meeshaa ykn barreeffamaan galmeessi. Osoo hin kaa'in dura yeroo hundaa galmee ni ilaalta.",
       },
       {
         title: "Daldala kee hubadhu",
@@ -963,7 +978,7 @@ const om: LandingCopy = {
       },
       {
         q: "Daldala akkamitti galmeessuu nan danda'a?",
-        a: "Daldala barreessuudhaan, gargaaraa waliin haasa'uudhaan ykn bakka deeggaramutti sagaleen galmeessuu ni dandeessa. Mizan dura galmee agarsiisa; erga ati mirkaneessitee booda qofa galmeessa.",
+        a: "Daldala barreessuudhaan, gargaaraa waliin haasa'uudhaan, bakka deeggaramutti sagaleen, ykn meeshaa fi risiitii suuraa kaasuudhaan galmeessuu ni dandeessa. Mizan dura galmee agarsiisa; erga ati mirkaneessitee booda qofa galmeessa.",
       },
       {
         q: "Mizan bilisaa dhaa?",

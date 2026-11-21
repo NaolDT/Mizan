@@ -13,7 +13,11 @@ import type {
 import { useLanguage } from "../context/LanguageContext";
 import { VISION_TEXT } from "../i18n/visionText";
 import { apiRequest, apiUpload } from "../lib/api";
-import { compressImageFile, detectBarcodeFromBlob } from "../lib/imageCapture";
+import {
+  compressImageFile,
+  detectBarcodeFromBlob,
+  detectBarcodeFromVideo,
+} from "../lib/imageCapture";
 import { formatEtb } from "../lib/format";
 
 type ReviewLine = {
@@ -59,6 +63,7 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [customerName, setCustomerName] = useState("");
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
+  const [liveBarcode, setLiveBarcode] = useState<string | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ["products"],
@@ -96,6 +101,22 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
     };
   }, [previewUrl, text.cameraDenied]);
 
+  useEffect(() => {
+    if (previewUrl) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+      void detectBarcodeFromVideo(video).then((code) => {
+        if (!cancelled && code) setLiveBarcode(code);
+      });
+    }, 700);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [previewUrl]);
+
   const captureFromVideo = async () => {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0) return;
@@ -122,7 +143,7 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
   const analyzeMutation = useMutation({
     mutationFn: async () => {
       if (!blob) throw new Error(text.permissionHelp);
-      const barcode = await detectBarcodeFromBlob(blob);
+      const barcode = (await detectBarcodeFromBlob(blob)) || liveBarcode;
       const form = new FormData();
       form.append("image", blob, "capture.jpg");
       form.append("workflow", workflow);
@@ -131,26 +152,48 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
       return apiUpload<VisionAnalyzeResponse>("/vision/analyze", form);
     },
     onSuccess: (data) => {
+      const nextWorkflow =
+        workflow === "GENERAL" && data.intentGuess && data.intentGuess !== "GENERAL"
+          ? data.intentGuess
+          : workflow;
+      if (nextWorkflow !== workflow) setWorkflow(nextWorkflow);
+      const purchase = nextWorkflow === "ADD_INVENTORY" || nextWorkflow === "SCAN_RECEIPT";
       setAnalysis(data);
-      const purchase = workflow === "ADD_INVENTORY" || workflow === "SCAN_RECEIPT";
-      setLines(
-        data.items.map((item, index) => {
-          const autoPick = item.match.confidence === "high" || item.match.confidence === "medium";
-          const catalogPrice = purchase ? item.match.costPrice : item.match.sellingPrice;
-          return {
-            key: `${item.detectedName}-${index}`,
-            detectedName: item.detectedName,
-            barcode: item.barcode,
-            productId: autoPick ? item.match.productId : null,
-            productName: autoPick ? item.match.productName : null,
-            confidence: item.match.confidence,
-            quantity: item.quantityGuess || 1,
-            unitPrice: autoPick ? catalogPrice ?? 0 : 0,
-            unmatchedAmount: 0,
-            alternatives: item.match.alternatives,
-          };
-        })
-      );
+      const mapped = data.items.map((item, index) => {
+        const autoPick = item.match.confidence === "high" || item.match.confidence === "medium";
+        const catalogPrice = purchase ? item.match.costPrice : item.match.sellingPrice;
+        return {
+          key: `${item.detectedName}-${index}`,
+          detectedName: item.detectedName,
+          barcode: item.barcode,
+          productId: autoPick ? item.match.productId : null,
+          productName: autoPick ? item.match.productName : null,
+          confidence: item.match.confidence,
+          quantity: item.quantityGuess || 1,
+          unitPrice: autoPick ? catalogPrice ?? 0 : 0,
+          unmatchedAmount: 0,
+          alternatives: item.match.alternatives,
+        };
+      });
+      if (
+        mapped.length === 0 &&
+        data.receipt?.total != null &&
+        data.receipt.total > 0
+      ) {
+        mapped.push({
+          key: "receipt-total",
+          detectedName: data.receipt.supplier || text.addUnmatched,
+          barcode: null,
+          productId: null,
+          productName: null,
+          confidence: "none",
+          quantity: 1,
+          unitPrice: 0,
+          unmatchedAmount: data.receipt.total,
+          alternatives: [],
+        });
+      }
+      setLines(mapped);
       if (data.receipt?.supplier) setCustomerName(data.receipt.supplier);
     },
   });
@@ -206,10 +249,11 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
           lines: lines.map((line) => ({
             productId: line.productId,
             quantity: line.quantity,
-            unitCost:
-              line.unitPrice > 0
+            unitCost: line.productId
+              ? line.unitPrice > 0
                 ? line.unitPrice
-                : products.find((p) => p.id === line.productId)?.costPrice || 1,
+                : products.find((p) => p.id === line.productId)?.costPrice || 0
+              : line.unmatchedAmount || line.unitPrice,
             description: line.productName || line.detectedName,
             detectedName: line.detectedName,
           })),
@@ -299,6 +343,16 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
           <div className="mt-4 space-y-3">
             <video ref={videoRef} autoPlay playsInline muted className="aspect-[3/4] w-full rounded-xl bg-slate-900 object-cover" />
             {cameraError && <p className="text-xs text-amber-700">{cameraError}</p>}
+            {liveBarcode && (
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                <span>
+                  {text.liveBarcode}: {liveBarcode}
+                </span>
+                <button type="button" onClick={() => void captureFromVideo()} className="underline">
+                  {text.useBarcode}
+                </button>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -340,6 +394,7 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
                   setBlob(null);
                   setAnalysis(null);
                   setLines([]);
+                  setLiveBarcode(null);
                 }}
                 className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold"
               >
@@ -390,6 +445,14 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
                 </div>
                 {(line.confidence === "low" || line.confidence === "none") && (
                   <p className="text-[11px] text-amber-700">{text.lowConfidence}</p>
+                )}
+                {workflow === "IDENTIFY" && line.productId && (
+                  <p className="text-[11px] text-slate-500">
+                    {text.inStock}: {products.find((p) => p.id === line.productId)?.quantityOnHand ?? "—"}
+                    {products.find((p) => p.id === line.productId)?.sellingPrice != null
+                      ? ` · ${formatEtb(products.find((p) => p.id === line.productId)!.sellingPrice!)}`
+                      : ""}
+                  </p>
                 )}
                 {line.alternatives.length > 0 && !line.productId && (
                   <div className="mt-2 flex flex-wrap gap-1">

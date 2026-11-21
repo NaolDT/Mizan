@@ -45,6 +45,8 @@ export interface ShopText {
   brand: string;
   sizeLabel: string;
   scanProduct: string;
+  priceHistory: string;
+  addPhoto: string;
 }
 
 const en: ShopText = {
@@ -92,6 +94,8 @@ const en: ShopText = {
   brand: "Brand",
   sizeLabel: "Size",
   scanProduct: "Scan product",
+  priceHistory: "Price history",
+  addPhoto: "Product photo",
 };
 
 const am: ShopText = {
@@ -139,6 +143,8 @@ const am: ShopText = {
   brand: "ብራንድ",
   sizeLabel: "መጠን",
   scanProduct: "እቃ ስካን",
+  priceHistory: "የዋጋ ታሪክ",
+  addPhoto: "የእቃ ፎቶ",
 };
 
 const om: ShopText = {
@@ -186,6 +192,8 @@ const om: ShopText = {
   brand: "Brandii",
   sizeLabel: "Hanga",
   scanProduct: "Meeshaa scan godhi",
+  priceHistory: "Seenaa gatii",
+  addPhoto: "Suuraa meeshaa",
 };
 
 export const SHOP_TEXT: Record<LanguageCode, ShopText> = { am, om, en };

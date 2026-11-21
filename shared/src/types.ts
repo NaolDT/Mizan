@@ -599,6 +599,16 @@ export interface InventoryValuationDto {
   retailValue: number;
 }
 
+export interface ProductPriceHistoryDto {
+  id: string;
+  productId: string;
+  sellingPrice: number | null;
+  costPrice: number | null;
+  previousSelling: number | null;
+  previousCost: number | null;
+  createdAt: string;
+}
+
 export interface InsightItemDto {
   id: string;
   severity: InsightSeverity;

@@ -35,6 +35,9 @@ export interface VisionText {
   done: string;
   supplierOptional: string;
   lineTotal: string;
+  liveBarcode: string;
+  useBarcode: string;
+  inStock: string;
 }
 
 const en: VisionText = {
@@ -72,6 +75,9 @@ const en: VisionText = {
   done: "Done",
   supplierOptional: "Supplier (optional)",
   lineTotal: "Line total",
+  liveBarcode: "Barcode",
+  useBarcode: "Use this barcode",
+  inStock: "In stock",
 };
 
 const am: VisionText = {
@@ -109,6 +115,9 @@ const am: VisionText = {
   done: "ተጠናቋል",
   supplierOptional: "አቅራቢ (አማራጭ)",
   lineTotal: "የመስመር ድምር",
+  liveBarcode: "ባርኮድ",
+  useBarcode: "ይህን ባርኮድ ተጠቀም",
+  inStock: "በክምችት",
 };
 
 const om: VisionText = {
@@ -146,6 +155,9 @@ const om: VisionText = {
   done: "Xumurame",
   supplierOptional: "Dhiyeessaa (filannoo)",
   lineTotal: "Waliigala sararaa",
+  liveBarcode: "Baarkoodii",
+  useBarcode: "Baarkoodii kana fayyadami",
+  inStock: "Kuufama keessa",
 };
 
 export const VISION_TEXT: Record<LanguageCode, VisionText> = { am, om, en };

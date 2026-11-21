@@ -2,6 +2,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import {
   BarChart3,
   CalendarDays,
+  Camera,
   CheckCircle2,
   Languages,
   Lightbulb,
@@ -14,7 +15,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { IncomeExpenseChart } from "./IncomeExpenseChart";
 import { CONTAINER, IllustrativeBadge, SectionHeading, useLandingCopy } from "./shared";
 
-const TAB_ICONS = [Mic, Languages, BarChart3, Lightbulb, Receipt];
+const TAB_ICONS = [Mic, Camera, Languages, BarChart3, Lightbulb, Receipt];
 const MANAGEMENT_ICONS = [Receipt, Wallet, CalendarDays, Pencil];
 
 /** One sentence in each supported language, always shown together. */
@@ -41,6 +42,22 @@ function VoiceVisual() {
           </span>
         </div>
         <p className="mt-1 text-xs text-slate-600">{copy.solution.sales}</p>
+      </div>
+    </div>
+  );
+}
+
+function CameraVisual() {
+  const copy = useLandingCopy();
+  return (
+    <div className="space-y-3">
+      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-slate-900 text-white">
+        <Camera className="h-10 w-10 text-emerald-300" aria-hidden="true" />
+      </div>
+      <div className="rounded-xl border border-emerald-300 bg-white p-3.5">
+        <p className="text-sm font-bold text-slate-900">{copy.solution.sales}</p>
+        <p className="mt-1 text-lg font-bold text-emerald-700">+645.00 ETB</p>
+        <p className="mt-1 text-xs text-slate-600">{copy.solution.voiceExample}</p>
       </div>
     </div>
   );
@@ -129,9 +146,9 @@ function ManagementVisual() {
   );
 }
 
-const VISUALS = [VoiceVisual, LanguageVisual, TrackingVisual, InsightVisual, ManagementVisual];
+const VISUALS = [VoiceVisual, CameraVisual, LanguageVisual, TrackingVisual, InsightVisual, ManagementVisual];
 // Visuals that show example numbers or conversations carry the illustrative badge.
-const ILLUSTRATIVE = new Set([0, 2, 3]);
+const ILLUSTRATIVE = new Set([0, 1, 3, 4]);
 
 export function SolutionSection() {
   const copy = useLandingCopy();
@@ -170,7 +187,7 @@ export function SolutionSection() {
             className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 lg:col-span-4 lg:flex-col lg:overflow-visible"
           >
             {tabs.map((tab, index) => {
-              const Icon = TAB_ICONS[index];
+              const Icon = TAB_ICONS[index] ?? Camera;
               const selected = index === active;
               return (
                 <button

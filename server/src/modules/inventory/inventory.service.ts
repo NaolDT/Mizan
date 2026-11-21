@@ -5,6 +5,7 @@ import type {
   DateRangePreset,
   InventoryValuationDto,
   ProductDto,
+  ProductPriceHistoryDto,
   ProductProfitabilityDto,
   StockMovementDto,
   StockMovementReason,
@@ -216,6 +217,31 @@ export async function saveProductImage(
     data: { imageBytes: Uint8Array.from(bytes), imageMime: mime.slice(0, 40) },
   });
   return mapProductDto(updated);
+}
+
+export async function listPriceHistory(
+  businessId: string,
+  productId: string
+): Promise<ProductPriceHistoryDto[]> {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, businessId },
+    select: { id: true },
+  });
+  if (!existing) throw new AppError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  const rows = await prisma.productPriceHistory.findMany({
+    where: { businessId, productId },
+    orderBy: { createdAt: "desc" },
+    take: 24,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    productId: row.productId,
+    sellingPrice: row.sellingPrice != null ? toNumber2(row.sellingPrice) : null,
+    costPrice: row.costPrice != null ? toNumber2(row.costPrice) : null,
+    previousSelling: row.previousSelling != null ? toNumber2(row.previousSelling) : null,
+    previousCost: row.previousCost != null ? toNumber2(row.previousCost) : null,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }
 
 export async function getProductImage(

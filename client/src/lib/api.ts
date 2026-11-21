@@ -72,6 +72,20 @@ export async function downloadCsv(path: string, filename: string): Promise<void>
   URL.revokeObjectURL(url);
 }
 
+export async function fetchAuthenticatedBlob(path: string): Promise<Blob> {
+  const token = getStoredToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers,
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(`Could not load the file (${response.status})`);
+  }
+  return response.blob();
+}
+
 export function apiUpload<T>(
   path: string,
   body: FormData,

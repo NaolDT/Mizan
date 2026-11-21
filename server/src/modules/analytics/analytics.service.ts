@@ -478,6 +478,20 @@ function insightCopy(
         body: "{name} yeroo kana {amount} ETB fideera ({qty} gurgurameera).",
       },
     },
+    "top-profit": {
+      en: {
+        title: "Highest estimated profit",
+        body: "{name} has about {amount} ETB gross profit this period from recorded cost and selling prices.",
+      },
+      am: {
+        title: "ከፍተኛ ግምታዊ ትርፍ",
+        body: "{name} በዚህ ጊዜ ከተመዘገበ ወጪና የሽያጭ ዋጋ ወደ {amount} ETB ጠቅላላ ትርፍ አለው።",
+      },
+      om: {
+        title: "Bu'aa tilmaamaa ol aanaa",
+        body: "{name} yeroo kana gatii bittaa fi gurgurtaa galmaa'e irraa {amount} ETB bu'aa waliigalaa qaba.",
+      },
+    },
     "slow-moving": {
       en: {
         title: "Slow-moving stock",
@@ -582,6 +596,21 @@ export async function getBusinessInsights(
       name: sold[0].name,
       amount: sold[0].revenue.toLocaleString("en-US"),
       qty: String(sold[0].quantitySold),
+    });
+  }
+
+  const profitable = [...profits]
+    .filter((p) => p.grossProfit != null && p.grossProfit > 0)
+    .sort((a, b) => (b.grossProfit ?? 0) - (a.grossProfit ?? 0));
+  if (profitable[0] && profitable[0].name !== sold[0]?.name) {
+    push("top-profit", "info", {
+      name: profitable[0].name,
+      amount: (profitable[0].grossProfit ?? 0).toLocaleString("en-US"),
+    });
+  } else if (profitable[0] && !sold[0]) {
+    push("top-profit", "info", {
+      name: profitable[0].name,
+      amount: (profitable[0].grossProfit ?? 0).toLocaleString("en-US"),
     });
   }
 

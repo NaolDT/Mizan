@@ -112,10 +112,13 @@ Verified 21 Nov 2026:
 
 ## 11. Remaining Work
 
+Completed in the follow-up slice: price history API/UI, product thumbnails, live barcode while the camera is open, receipt-total fallback, GENERAL intent routing, identify stock display, top-profit insight, landing copy for camera.
+
+Still out of scope / later:
+
 - Dedicated object storage / retention policy for full-resolution photos.
-- Native barcode SDK if `BarcodeDetector` is missing on many devices.
+- Native barcode SDK when `BarcodeDetector` is missing (Gemini still reads barcodes from the photo).
 - Partial payments (not in current ledger).
 - Staff-role price-override policy (single OWNER today).
 - Telebirr/Chapa still unused.
-- End-to-end camera capture on a physical phone (permissions, lighting, barcode).
-- Browser UI walkthrough was not available in this session (MCP browser server missing); verify Capture overlay on `/app` locally.
+- Physical-phone lighting/barcode field testing.

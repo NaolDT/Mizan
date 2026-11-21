@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
@@ -6,14 +6,48 @@ import type {
   CreateProductRequest,
   InventoryValuationDto,
   ProductDto,
+  ProductPriceHistoryDto,
   ProductProfitabilityDto,
   StockMovementDto,
   UpdateProductRequest,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
 import { SHOP_TEXT } from "../i18n/shopText";
-import { apiRequest } from "../lib/api";
+import { apiRequest, apiUpload, fetchAuthenticatedBlob } from "../lib/api";
+import { compressImageFile } from "../lib/imageCapture";
 import { formatEtb, formatShortDate } from "../lib/format";
+
+function ProductThumb({
+  productId,
+  hasImage,
+  alt,
+}: {
+  productId: string;
+  hasImage: boolean;
+  alt: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasImage) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void fetchAuthenticatedBlob(`/inventory/${productId}/image`)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [productId, hasImage]);
+  if (!hasImage || !url) return null;
+  return <img src={url} alt={alt} className="h-14 w-14 rounded-xl object-cover" />;
+}
 
 export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }) {
   const { language } = useLanguage();
@@ -45,6 +79,11 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
   const profitQuery = useQuery({
     queryKey: ["product-profit", "month"],
     queryFn: () => apiRequest<ProductProfitabilityDto[]>("/inventory/profitability?range=month"),
+  });
+  const historyQuery = useQuery({
+    queryKey: ["price-history", editing?.id],
+    queryFn: () => apiRequest<ProductPriceHistoryDto[]>(`/inventory/${editing!.id}/price-history`),
+    enabled: Boolean(editing?.id),
   });
   const valuationQuery = useQuery({
     queryKey: ["inventory-valuation"],
@@ -104,7 +143,20 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["product-profit"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
+      queryClient.invalidateQueries({ queryKey: ["price-history"] });
       resetForm();
+    },
+  });
+
+  const photoMutation = useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const thumb = await compressImageFile(file, 640, 0.5);
+      const form = new FormData();
+      form.append("image", thumb, "product.jpg");
+      return apiUpload<ProductDto>(`/inventory/${id}/image`, form);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
     },
   });
 
@@ -282,6 +334,34 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
             placeholder={text.costPrice}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
+          {editing && (
+            <label className="text-xs text-slate-500 sm:col-span-2">
+              {text.addPhoto}
+              <input
+                type="file"
+                accept="image/*"
+                className="mt-1 block w-full text-sm"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) photoMutation.mutate({ id: editing.id, file });
+                }}
+              />
+            </label>
+          )}
+          {editing && (historyQuery.data?.length ?? 0) > 0 && (
+            <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 sm:col-span-2">
+              <p className="font-semibold text-slate-800">{text.priceHistory}</p>
+              <ul className="mt-1 space-y-1">
+                {historyQuery.data!.slice(0, 6).map((row) => (
+                  <li key={row.id}>
+                    {formatShortDate(row.createdAt)}
+                    {row.sellingPrice != null ? ` · ${formatEtb(row.sellingPrice)}` : ""}
+                    {row.costPrice != null ? ` / ${formatEtb(row.costPrice)}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button
             type="submit"
             disabled={createMutation.isPending || updateMutation.isPending}
@@ -306,12 +386,15 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
           {products.map((product) => (
             <li key={product.id} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="flex items-start gap-3">
+                  <ProductThumb productId={product.id} hasImage={product.hasImage} alt={product.name} />
+                  <div>
                   <p className="font-bold text-slate-900">{product.name}</p>
                   <p className="text-xs text-slate-500">
                     {[product.brand, product.sizeLabel, product.unit].filter(Boolean).join(" · ")}
                     {product.barcode ? ` · ${product.barcode}` : ""}
                   </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   {product.isLowStock && (
