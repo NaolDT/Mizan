@@ -9,6 +9,8 @@ import { aiRouter } from "./modules/ai/ai.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { businessRouter } from "./modules/business/business.routes.js";
+import { rewardsRouter } from "./modules/rewards/rewards.routes.js";
+import { subscriptionRouter } from "./modules/subscription/subscription.routes.js";
 import { transactionRouter } from "./modules/transactions/transaction.routes.js";
 import { voiceRouter } from "./modules/voice/voice.routes.js";
 import { sendSuccess } from "./utils/apiResponse.js";
@@ -66,6 +68,8 @@ export function createApp() {
   app.use("/api/v1/analytics", analyticsRouter);
   app.use("/api/v1/ai", aiRouter);
   app.use("/api/v1/voice", voiceRouter);
+  app.use("/api/v1/subscription", subscriptionRouter);
+  app.use("/api/v1/rewards", rewardsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

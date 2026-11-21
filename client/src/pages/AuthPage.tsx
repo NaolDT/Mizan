@@ -4,6 +4,7 @@ import { Loader2, Scale, Sparkles } from "lucide-react";
 import type { BusinessCategory, LanguageCode } from "@mizan/shared";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 
 const BUSINESS_CATEGORIES: BusinessCategory[] = [
@@ -38,6 +39,10 @@ export function AuthPage() {
   const [shopName, setShopName] = useState("");
   const [shopCategory, setShopCategory] = useState<BusinessCategory>("GROCERY");
   const [location, setLocation] = useState("");
+  const [inviteCode, setInviteCode] = useState(
+    (searchParams.get("ref") ?? "").trim().toUpperCase().slice(0, 24)
+  );
+  const rewardsText = REWARDS_TEXT[language];
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +75,7 @@ export function AuthPage() {
         businessCategory: shopCategory,
         location: location.trim() || undefined,
         preferredLanguage: language,
+        referralCode: inviteCode.trim() || undefined,
       });
       navigate("/app");
     } catch (err) {
@@ -318,6 +324,23 @@ export function AuthPage() {
                     className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:border-emerald-600 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700">
+                  {rewardsText.inviteCodeLabel}
+                </label>
+                <input
+                  type="text"
+                  maxLength={24}
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                  placeholder="MIZAN-ABCD-1234"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs focus:border-emerald-600 focus:outline-none"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {rewardsText.inviteCodeHint}
+                </p>
               </div>
 
               {error && (

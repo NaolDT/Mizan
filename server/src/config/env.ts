@@ -36,4 +36,13 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+// Real payment gateways are not connected yet. Until they are, plan changes and
+// voice packs are applied by hand in development and blocked in production.
+const manualBillingRaw = process.env.ALLOW_MANUAL_BILLING?.trim().toLowerCase();
+
+export const env = {
+  ...parsed.data,
+  manualBillingEnabled: manualBillingRaw
+    ? manualBillingRaw === "true"
+    : parsed.data.NODE_ENV !== "production",
+};

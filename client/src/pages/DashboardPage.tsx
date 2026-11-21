@@ -35,6 +35,9 @@ import { BusinessSettingsModal } from "../components/BusinessSettingsModal";
 import { TransactionModal } from "../components/TransactionModal";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { RewardsPanel } from "../components/RewardsPanel";
+import { useRefreshBilling } from "../hooks/useBilling";
+import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 import { apiRequest } from "../lib/api";
 import { formatEtb, formatShortDate } from "../lib/format";
@@ -47,9 +50,11 @@ export function DashboardPage() {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "ledger">(
+  const [activeTab, setActiveTab] = useState<"dashboard" | "ledger" | "rewards">(
     "dashboard"
   );
+  const refreshBilling = useRefreshBilling();
+  const rewardsText = REWARDS_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("ALL");
 
@@ -96,6 +101,8 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      // Points are granted a moment after the write, so check again shortly.
+      window.setTimeout(refreshBilling, 1500);
     },
   });
 
@@ -176,6 +183,17 @@ export function DashboardPage() {
                   }`}
                 >
                   {t.ledgerTab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("rewards")}
+                  className={`font-semibold ${
+                    activeTab === "rewards"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {rewardsText.tab}
                 </button>
               </div>
             </div>
@@ -466,7 +484,10 @@ export function DashboardPage() {
           </>
         )}
 
+        {activeTab === "rewards" && <RewardsPanel />}
+
         {/* Transactions Feed / Ledger */}
+        {activeTab !== "rewards" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-900">
@@ -574,6 +595,7 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+        )}
       </main>
 
       {/* Floating Mobile Quick Mic Button */}
@@ -611,6 +633,10 @@ export function DashboardPage() {
         autoStartVoice={autoStartVoice}
         onAutoStartConsumed={() => setAutoStartVoice(false)}
         onClose={() => setAssistantOpen(false)}
+        onOpenRewards={() => {
+          setAssistantOpen(false);
+          setActiveTab("rewards");
+        }}
       />
     </div>
   );

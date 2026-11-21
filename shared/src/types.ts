@@ -120,6 +120,7 @@ export interface RegisterRequest {
   businessCategory: BusinessCategory;
   location?: string;
   preferredLanguage: LanguageCode;
+  referralCode?: string;
 }
 
 export interface LoginRequest {
@@ -292,4 +293,136 @@ export interface ConfirmActionResponse {
   message: AiMessageDto;
   transaction: TransactionDto;
   summary: FinancialSummaryDto;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subscription, Voice Allowance & Rewards DTOs
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ReferralStatus = "PENDING" | "QUALIFIED" | "REJECTED";
+
+export type RewardEventType =
+  | "EARN_FIRST_TRANSACTIONS"
+  | "EARN_STREAK_7"
+  | "EARN_REFERRAL_REFERRER"
+  | "EARN_REFERRAL_WELCOME"
+  | "REDEEM_EXTRA_VOICE"
+  | "REDEEM_DISCOUNT"
+  | "REDEEM_STARTER_WEEK";
+
+export type RedeemOptionId = "EXTRA_VOICE" | "DISCOUNT_10" | "STARTER_WEEK";
+
+export type RedeemBlockReason =
+  | "NOT_ENOUGH_POINTS"
+  | "ALREADY_ACTIVE"
+  | "COOLDOWN";
+
+export interface VoiceQuotaDto {
+  plan: SubscriptionPlan;
+  effectivePlan: SubscriptionPlan;
+  monthlyAllowance: number;
+  used: number;
+  bonusReplies: number;
+  remaining: number;
+  trialEndsAt: string | null;
+  periodResetsOn: string; // YYYY-MM-DD in Africa/Addis_Ababa
+}
+
+export interface PlanOfferDto {
+  plan: SubscriptionPlan;
+  priceEtb: number;
+  monthlyReplies: number;
+}
+
+export interface SubscriptionSummaryDto {
+  quota: VoiceQuotaDto;
+  plans: PlanOfferDto[];
+  voicePack: { replies: number; priceEtb: number };
+  nextBillDiscountPct: number;
+  manualBillingEnabled: boolean;
+}
+
+export interface BillingActionResponse {
+  summary: SubscriptionSummaryDto;
+  chargedEtb: number;
+  discountAppliedPct: number;
+}
+
+export interface ChangePlanRequest {
+  plan: SubscriptionPlan;
+}
+
+export interface TtsResponse {
+  audioBase64: string | null;
+  audioMimeType: string | null;
+  provider: string | null;
+  quotaExceeded: boolean;
+  quota: VoiceQuotaDto;
+}
+
+export interface RewardLedgerEntryDto {
+  id: string;
+  type: RewardEventType;
+  points: number;
+  createdAt: string;
+}
+
+export interface ReferralProgressDto {
+  transactions: number;
+  required: number;
+  windowEndsAt: string;
+}
+
+export interface ReferralDto {
+  id: string;
+  status: ReferralStatus;
+  referredShopName: string | null;
+  progress: ReferralProgressDto;
+  qualifiedAt: string | null;
+  rejectionReason: string | null;
+  pointsEarned: number;
+  createdAt: string;
+}
+
+export interface RedeemOptionDto {
+  id: RedeemOptionId;
+  costPoints: number;
+  available: boolean;
+  blockedReason: RedeemBlockReason | null;
+}
+
+export interface RewardRulesDto {
+  firstTransactionsRequired: number;
+  firstTransactionsPoints: number;
+  streakDays: number;
+  streakPoints: number;
+  referralWindowDays: number;
+  referralMinTransactions: number;
+  referrerPoints: number;
+  referredPoints: number;
+  welcomeReplies: number;
+}
+
+export interface RewardSummaryDto {
+  balance: number;
+  referralCode: string;
+  referralLinkPath: string;
+  referrals: ReferralDto[];
+  referredBy: {
+    status: ReferralStatus;
+    rejectionReason: string | null;
+    progress: ReferralProgressDto;
+  } | null;
+  ledger: RewardLedgerEntryDto[];
+  redeemOptions: RedeemOptionDto[];
+  rules: RewardRulesDto;
+}
+
+export interface RedeemRequest {
+  option: RedeemOptionId;
+}
+
+export interface RedeemResponse {
+  rewards: RewardSummaryDto;
+  subscription: SubscriptionSummaryDto;
 }

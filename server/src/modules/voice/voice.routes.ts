@@ -1,12 +1,13 @@
 import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
-import type { LanguageCode, VoiceTurnResponse } from "@mizan/shared";
+import type { LanguageCode, TtsResponse, VoiceTurnResponse } from "@mizan/shared";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import { processAssistantTurn } from "../ai/ai.service.js";
-import { synthesizeSpeech, transcribeSpeechBuffer } from "./voice.service.js";
+import { synthesizeMeteredSpeech } from "./voice.metered.js";
+import { transcribeSpeechBuffer } from "./voice.service.js";
 
 export const voiceRouter = Router();
 
@@ -129,7 +130,11 @@ voiceRouter.post("/transcribe", upload.single("audio"), async (req, res, next) =
 voiceRouter.post("/tts", async (req, res, next) => {
   try {
     const body = ttsBodySchema.parse(req.body);
-    const tts = await synthesizeSpeech(body.text, body.language);
+    const tts: TtsResponse = await synthesizeMeteredSpeech(
+      req.tenant!.businessId,
+      body.text,
+      body.language
+    );
     sendSuccess(res, tts);
   } catch (err) {
     next(err);

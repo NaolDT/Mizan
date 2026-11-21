@@ -89,6 +89,22 @@ enum ActionStatus {
   CANCELLED
 }
 
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REJECTED
+}
+
+enum RewardEventType {
+  EARN_FIRST_TRANSACTIONS
+  EARN_STREAK_7
+  EARN_REFERRAL_REFERRER
+  EARN_REFERRAL_WELCOME
+  REDEEM_EXTRA_VOICE
+  REDEEM_DISCOUNT
+  REDEEM_STARTER_WEEK
+}
+
 model User {
   id                String           @id @default(uuid()) @db.Uuid
   name              String           @db.VarChar(120)
@@ -100,9 +116,14 @@ model User {
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  referralCode      String?          @unique @map("referral_code") @db.VarChar(24)
+
   businesses        Business[]
   transactions      Transaction[]
   conversations     AiConversation[]
+  referralsMade     Referral[]       @relation("ReferrerRelation")
+  referralReceived  Referral?        @relation("ReferredRelation")
+  rewardEntries     RewardLedger[]
 
   @@map("users")
 }
@@ -123,6 +144,12 @@ model Business {
   transactions      Transaction[]
   conversations     AiConversation[]
   messages          AiMessage[]
+
+  voiceRepliesUsed    Int       @default(0) @map("voice_replies_used")
+  voiceBonusReplies   Int       @default(0) @map("voice_bonus_replies")
+  usagePeriod         String    @default("") @map("usage_period") @db.VarChar(7)
+  trialEndsAt         DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  nextBillDiscountPct Int       @default(0) @map("next_bill_discount_pct")
 
   @@index([ownerId])
   @@map("businesses")
@@ -196,4 +223,39 @@ model AiMessage {
   @@index([conversationId, createdAt])
   @@index([businessId, actionStatus])
   @@map("ai_messages")
+}
+
+model Referral {
+  id              String         @id @default(uuid()) @db.Uuid
+  referrerId      String         @map("referrer_id") @db.Uuid
+  referredUserId  String         @unique @map("referred_user_id") @db.Uuid
+  codeUsed        String         @map("code_used") @db.VarChar(24)
+  status          ReferralStatus @default(PENDING)
+  qualifiedAt     DateTime?      @map("qualified_at") @db.Timestamptz(6)
+  rejectionReason String?        @map("rejection_reason") @db.VarChar(40)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  referrer        User           @relation("ReferrerRelation", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser    User           @relation("ReferredRelation", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, status])
+  @@map("referrals")
+}
+
+model RewardLedger {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @map("user_id") @db.Uuid
+  type        RewardEventType
+  points      Int
+  description String          @db.VarChar(200)
+  sourceKey   String          @map("source_key") @db.VarChar(120)
+  referralId  String?         @map("referral_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("reward_ledger")
 }

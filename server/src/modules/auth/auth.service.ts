@@ -10,6 +10,11 @@ import type {
 import { prisma } from "../../config/prisma.js";
 import { signAuthToken } from "../../middleware/auth.middleware.js";
 import { AppError } from "../../utils/apiResponse.js";
+import {
+  generateUniqueReferralCode,
+  normalizeReferralCode,
+  resolveReferrerByCode,
+} from "../rewards/rewards.service.js";
 
 const DEMO_EMAIL = "demo@mizan.et";
 const DEMO_PHONE = "+251911223344";
@@ -86,9 +91,26 @@ export async function registerMerchant(input: RegisterRequest): Promise<AuthResp
     }
   }
 
+  // An invite code must belong to a real shop owner, otherwise the new owner
+  // would silently lose the reward they were promised.
+  const referralCodeInput = input.referralCode?.trim();
+  let referrer: User | null = null;
+  if (referralCodeInput) {
+    referrer = await resolveReferrerByCode(referralCodeInput);
+    if (!referrer) {
+      throw new AppError(
+        400,
+        "INVALID_REFERRAL_CODE",
+        "This invite code was not found. Check the code or leave it empty."
+      );
+    }
+  }
+
   const passwordHash = await bcrypt.hash(input.password, 12);
 
   const { user, business } = await prisma.$transaction(async (tx) => {
+    const ownReferralCode = await generateUniqueReferralCode(tx, input.name.trim());
+
     const createdUser = await tx.user.create({
       data: {
         name: input.name.trim(),
@@ -97,8 +119,19 @@ export async function registerMerchant(input: RegisterRequest): Promise<AuthResp
         passwordHash,
         preferredLanguage: input.preferredLanguage,
         role: "OWNER",
+        referralCode: ownReferralCode,
       },
     });
+
+    if (referrer) {
+      await tx.referral.create({
+        data: {
+          referrerId: referrer.id,
+          referredUserId: createdUser.id,
+          codeUsed: referrer.referralCode ?? normalizeReferralCode(referralCodeInput ?? ""),
+        },
+      });
+    }
 
     const createdBusiness = await tx.business.create({
       data: {

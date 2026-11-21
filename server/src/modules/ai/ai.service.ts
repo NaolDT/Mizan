@@ -27,7 +27,7 @@ import {
   coerceCategoryForType,
   createTransaction,
 } from "../transactions/transaction.service.js";
-import { synthesizeSpeech } from "../voice/voice.service.js";
+import { synthesizeMeteredSpeech } from "../voice/voice.metered.js";
 
 interface StructuredLlmResult {
   intent: SupportedAiIntent;
@@ -558,7 +558,11 @@ export async function processAssistantTurn(params: {
   let ttsProvider: string | null = null;
 
   if (params.speakReply) {
-    const tts = await synthesizeSpeech(llmOutput.spokenMessage, params.language);
+    const tts = await synthesizeMeteredSpeech(
+      params.businessId,
+      llmOutput.spokenMessage,
+      params.language
+    );
     audioBase64 = tts.audioBase64;
     audioMimeType = tts.audioMimeType;
     ttsProvider = tts.provider;

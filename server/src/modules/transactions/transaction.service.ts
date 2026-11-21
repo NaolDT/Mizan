@@ -11,6 +11,7 @@ import type {
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
 import { getEatDateWindow } from "../../utils/eatDate.js";
+import { evaluateRewardsForBusiness } from "../rewards/rewards.service.js";
 
 const INCOME_CATEGORIES = new Set<TransactionCategory>([
   "SALES",
@@ -153,6 +154,11 @@ export async function createTransaction(
       idempotencyKey: normalizedKey,
       status: "COMPLETED",
     },
+  });
+
+  // Rewards run after the ledger write and must never fail or slow a sale.
+  void evaluateRewardsForBusiness(businessId).catch((err) => {
+    console.error("[rewards] evaluation failed:", err);
   });
 
   return mapTransactionDto(created);

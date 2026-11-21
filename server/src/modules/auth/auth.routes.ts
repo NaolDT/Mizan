@@ -32,6 +32,7 @@ const registerSchema = z.object({
   ]),
   location: z.string().max(140).optional(),
   preferredLanguage: z.enum(["am", "om", "en"]).default("am"),
+  referralCode: z.string().max(24).optional(),
 });
 
 const loginSchema = z.object({

@@ -21,9 +21,16 @@ import type {
   PaymentMethod,
   ProposedTransactionDraft,
   TransactionCategory,
+  TtsResponse,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
+import {
+  REWARDS_KEY,
+  SUBSCRIPTION_KEY,
+  useSubscription,
+} from "../hooks/useBilling";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
+import { fill, REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 import { apiRequest, apiUpload } from "../lib/api";
 import { playAssistantVoice, stopActiveAudio } from "../lib/audioPlayer";
@@ -97,6 +104,11 @@ function PendingActionCard({ message, onConfirmed }: PendingActionCardProps) {
       queryClient.invalidateQueries({ queryKey: ["ai-conversation"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      // Reward points are granted a moment after the ledger write.
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: REWARDS_KEY });
+        void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });
+      }, 1500);
       onConfirmed();
     },
   });
@@ -267,6 +279,7 @@ interface AssistantDrawerProps {
   autoStartVoice?: boolean;
   onAutoStartConsumed?: () => void;
   onClose: () => void;
+  onOpenRewards?: () => void;
 }
 
 export function AssistantDrawer({
@@ -274,9 +287,23 @@ export function AssistantDrawer({
   autoStartVoice,
   onAutoStartConsumed,
   onClose,
+  onOpenRewards,
 }: AssistantDrawerProps) {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
+  const rewardsText = REWARDS_TEXT[language];
+  const subscription = useSubscription(open);
+  const quota = subscription.data?.quota;
+  const quotaOut = quota !== undefined && quota.remaining <= 0;
+
+  /** Keeps the remaining-replies counter in step with what the server just spent. */
+  const applyTtsQuota = (res: TtsResponse) => {
+    queryClient.setQueryData(
+      SUBSCRIPTION_KEY,
+      (old: { quota: TtsResponse["quota"] } | undefined) =>
+        old ? { ...old, quota: res.quota } : old
+    );
+  };
   const [inputText, setInputText] = useState("");
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [turnError, setTurnError] = useState<string | null>(null);
@@ -325,13 +352,13 @@ export function AssistantDrawer({
     if (!autoSpeak || !text?.trim()) return;
     setVoicePhase("speaking");
     try {
-      const res = await apiRequest<{
-        audioBase64: string | null;
-        audioMimeType: string | null;
-      }>("/voice/tts", {
+      const res = await apiRequest<TtsResponse>("/voice/tts", {
         method: "POST",
         body: JSON.stringify({ text, language }),
       });
+      applyTtsQuota(res);
+      // Out of spoken replies: the answer stays on screen as text.
+      if (res.quotaExceeded) return;
       await playAssistantVoice({
         audioBase64: res.audioBase64,
         audioMimeType: res.audioMimeType,
@@ -377,13 +404,12 @@ export function AssistantDrawer({
   const replayMutation = useMutation({
     mutationFn: async (msg: AiMessageDto) => {
       const text = msg.spokenText || msg.displayText;
-      const res = await apiRequest<{
-        audioBase64: string | null;
-        audioMimeType: string | null;
-      }>("/voice/tts", {
+      const res = await apiRequest<TtsResponse>("/voice/tts", {
         method: "POST",
         body: JSON.stringify({ text, language }),
       });
+      applyTtsQuota(res);
+      if (res.quotaExceeded) return;
       await playAssistantVoice({
         audioBase64: res.audioBase64,
         audioMimeType: res.audioMimeType,
@@ -560,6 +586,23 @@ export function AssistantDrawer({
               {t.autoSpeakLabel}
             </button>
           </div>
+
+          {quota && (
+            <button
+              type="button"
+              onClick={onOpenRewards}
+              className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                quotaOut
+                  ? "bg-rose-50 text-rose-700"
+                  : quota.remaining <= 3
+                    ? "bg-amber-50 text-amber-800"
+                    : "bg-emerald-50 text-emerald-800"
+              }`}
+            >
+              <Volume2 className="h-3 w-3" />
+              {fill(rewardsText.quotaPill, { n: quota.remaining })}
+            </button>
+          )}
         </div>
 
         {/* Messages Feed */}
@@ -669,6 +712,21 @@ export function AssistantDrawer({
           {(micError || turnError) && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
               {micError || turnError}
+            </div>
+          )}
+
+          {quotaOut && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+              <p>{rewardsText.quotaOut}</p>
+              {onOpenRewards && (
+                <button
+                  type="button"
+                  onClick={onOpenRewards}
+                  className="mt-1.5 font-bold text-emerald-700 underline underline-offset-2"
+                >
+                  {rewardsText.quotaOutAction}
+                </button>
+              )}
             </div>
           )}
 
