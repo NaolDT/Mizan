@@ -1,4 +1,4 @@
-# Mizan AI (ሚዛን AI)
+# Mizan AI
 
 **Voice-First AI Financial & Business Management Assistant for Ethiopian Small Businesses**
 

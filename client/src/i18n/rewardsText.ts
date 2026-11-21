@@ -156,7 +156,7 @@ const am: RewardsText = {
   currentPlan: "የአሁኑ ፕላን",
   choose: "ምረጥ",
   billingDemoNote: "የኦንላይን ክፍያ ገና አልተገናኘም። በዚህ ማሳያ ፕላን ወዲያውኑ ይቀየራል፤ ምንም አይከፈልም።",
-  billingUnavailable: "የኦንላይን ክፍያ በቅርቡ ይመጣል። ፕላን ለመቀየር ሚዛንን ያነጋግሩ።",
+  billingUnavailable: "የኦንላይን ክፍያ በቅርቡ ይመጣል። ፕላን ለመቀየር Mizan ን ያነጋግሩ።",
   buyPack: "{n} መልሶችን በ{price} ብር ይጨምሩ",
   discountActive: "በቀጣዩ የፕላን ክፍያዎ ላይ {pct}% ቅናሽ ተዘጋጅቷል",
   charged: "የሚከፈል መጠን፦ {amount} ብር",
@@ -181,7 +181,7 @@ const am: RewardsText = {
   earnTitle: "እንዴት ያገኛሉ",
   earnFirst: "የመጀመሪያዎቹን {n} ግብይቶች ይመዝግቡ፦ +{pts} ነጥብ",
   earnStreak: "ለ{days} ቀናት በተከታታይ ግብይት ይመዝግቡ፦ +{pts} ነጥብ",
-  earnReferral: "ሚዛንን መጠቀም የጀመረ እያንዳንዱ የጋበዙት ሱቅ፦ +{pts} ነጥብ",
+  earnReferral: "Mizan ን መጠቀም የጀመረ እያንዳንዱ የጋበዙት ሱቅ፦ +{pts} ነጥብ",
   redeemTitle: "ነጥብዎን ይጠቀሙ",
   redeemOptions: {
     EXTRA_VOICE: { name: "10 ተጨማሪ የድምፅ መልሶች", description: "ወዲያውኑ ይጨመራል።" },

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { LanguageCode } from "@mizan/shared";
 import { TRANSLATIONS, type UiDictionary } from "../i18n/translations";
 
@@ -23,6 +31,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return isLanguageCode(saved) ? saved : "am";
   });
   const userSelectedLanguage = useRef(isLanguageCode(localStorage.getItem(STORAGE_KEY)));
+
+  // Keep <html lang> correct from the first render, not only after a switch.
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   const writeLanguage = useCallback((lang: LanguageCode) => {
     setLanguageState(lang);

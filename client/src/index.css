@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+/* Smooth in-page navigation; sections keep clear of the sticky header. */
+html {
+  scroll-behavior: smooth;
+}
+
+section[id] {
+  scroll-margin-top: 4.5rem;
+}
+
+/* Voice demo waveform. */
+@keyframes mizan-wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.mizan-wave-bar {
+  animation: mizan-wave 1s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .mizan-wave-bar {
+    animation: none;
+  }
+}

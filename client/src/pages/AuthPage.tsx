@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, Scale, Sparkles } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { MizanLogoMark } from "../components/brand/MizanLogo";
 import type { BusinessCategory, LanguageCode } from "@mizan/shared";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -107,9 +108,7 @@ export function AuthPage() {
             onClick={() => navigate("/")}
             className="flex items-center gap-2 text-left"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <Scale className="h-5 w-5" />
-            </div>
+            <MizanLogoMark />
             <span className="text-lg font-bold text-slate-900">{t.appName}</span>
           </button>
 

@@ -8,7 +8,6 @@ import {
   Mic,
   Pencil,
   Plus,
-  Scale,
   Settings,
   Sparkles,
   Trash2,
@@ -35,6 +34,7 @@ import { BusinessSettingsModal } from "../components/BusinessSettingsModal";
 import { TransactionModal } from "../components/TransactionModal";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { MizanLogoMark } from "../components/brand/MizanLogo";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
@@ -147,9 +147,7 @@ export function DashboardPage() {
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <Scale className="h-5 w-5" />
-            </div>
+            <MizanLogoMark />
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-slate-900 sm:text-base">

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { InfoPage } from "./pages/InfoPage";
 import { LandingPage } from "./pages/LandingPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -29,6 +30,8 @@ export function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/privacy" element={<InfoPage kind="privacy" />} />
+      <Route path="/terms" element={<InfoPage kind="terms" />} />
       <Route
         path="/app"
         element={
