@@ -175,9 +175,33 @@ export async function getOrCreateLatestConversation(
   };
 }
 
+function readErrorStatus(err: unknown): number | undefined {
+  if (typeof err === "object" && err !== null && "status" in err) {
+    const status = (err as { status?: unknown }).status;
+    return typeof status === "number" ? status : undefined;
+  }
+  return undefined;
+}
+
+function shortError(message: string): string {
+  const compact = message.replace(/\s+/g, " ").trim();
+  return compact.length > 180 ? `${compact.slice(0, 180)}…` : compact;
+}
+
+function isRetryableModelError(err: unknown): boolean {
+  const status = readErrorStatus(err);
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    status === 404 ||
+    status === 429 ||
+    status === 503 ||
+    /high demand|UNAVAILABLE|NOT_FOUND|not found|RESOURCE_EXHAUSTED/i.test(message)
+  );
+}
+
 /**
- * Deterministic Tier-4 Fallback when GEMINI_API_KEY is unconfigured or unreachable.
- * Parses Amharic, Afaan Oromo, and English patterns and uses REAL SQL numbers.
+ * Deterministic fallback when every Gemini model is unavailable.
+ * Parses Amharic, Afaan Oromo, and English patterns and uses real SQL numbers.
  */
 function buildDeterministicFallbackResult(
   userText: string,
@@ -353,30 +377,44 @@ ${JSON.stringify({
   ];
 
   const modelsToTry = [
-    { modelName: env.GEMINI_MODEL, fast: true },
-    { modelName: env.GEMINI_MODEL, fast: false },
-    { modelName: env.GEMINI_FALLBACK_MODEL, fast: true },
+    ...new Set([
+      env.GEMINI_MODEL,
+      env.GEMINI_FALLBACK_MODEL,
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-2.5-flash-lite",
+    ]),
   ];
-  for (const attempt of modelsToTry) {
+
+  const askModel = (modelName: string, useFastThinking: boolean) =>
+    ai.models.generateContent({
+      model: modelName,
+      contents,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: AI_RESPONSE_SCHEMA,
+        temperature: 0.2,
+        ...(useFastThinking
+          ? {
+              thinkingConfig: {
+                thinkingLevel: ThinkingLevel.LOW,
+                includeThoughts: false,
+              },
+            }
+          : {}),
+      },
+    });
+
+  for (const modelName of modelsToTry) {
     try {
-      const response = await ai.models.generateContent({
-        model: attempt.modelName,
-        contents,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: AI_RESPONSE_SCHEMA,
-          temperature: 0.2,
-          ...(attempt.fast
-            ? {
-                thinkingConfig: {
-                  thinkingLevel: ThinkingLevel.LOW,
-                  includeThoughts: false,
-                },
-              }
-            : {}),
-        },
-      });
+      let response;
+      try {
+        response = await askModel(modelName, true);
+      } catch (err) {
+        if (isRetryableModelError(err)) throw err;
+        response = await askModel(modelName, false);
+      }
 
       const rawJson = response.text?.trim();
       if (rawJson) {
@@ -390,7 +428,9 @@ ${JSON.stringify({
         };
       }
     } catch (err) {
-      console.warn(`[Gemini Orchestrator (${attempt.modelName})] Error:`, err);
+      const status = readErrorStatus(err);
+      const message = err instanceof Error ? err.message : "Gemini request failed";
+      console.warn(`[Gemini] ${modelName} failed (${status ?? "unknown"}). ${shortError(message)}`);
     }
   }
 

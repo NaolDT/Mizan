@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDto | null>(null);
   const [business, setBusiness] = useState<BusinessDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { setLanguage } = useLanguage();
+  const { setLanguage, applyAccountLanguage } = useLanguage();
   const queryClient = useQueryClient();
 
   const applySession = useCallback(
@@ -43,9 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStoredToken(res.token);
       setUser(res.user);
       setBusiness(res.business);
-      setLanguage(res.business.preferredLanguage);
+      applyAccountLanguage(res.business.preferredLanguage);
     },
-    [setLanguage]
+    [applyAccountLanguage]
   );
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setUser(profile.user);
           setBusiness(profile.business);
-          setLanguage(profile.business.preferredLanguage);
+          applyAccountLanguage(profile.business.preferredLanguage);
         }
       })
       .catch(() => {
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [setLanguage]);
+  }, [applyAccountLanguage]);
 
   const login = async (input: LoginRequest) => {
     const res = await apiRequest<AuthResponse>("/auth/login", {

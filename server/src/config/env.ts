@@ -16,7 +16,7 @@ const envSchema = z.object({
     .default("mizan-dev-jwt-secret-change-in-production-2026"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   GEMINI_API_KEY: z.string().optional().default(""),
-  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3.5-flash"),
   GEMINI_FALLBACK_MODEL: z.string().default("gemini-3.5-flash-lite"),
   ADDIS_API_KEY: z.string().optional().default(""),
   ADDIS_BASE_URL: z.string().default("https://api.addisassistant.com/api/v1"),
