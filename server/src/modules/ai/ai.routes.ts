@@ -19,7 +19,7 @@ const chatBodySchema = z.object({
   language: z.enum(["am", "om", "en"]).default("am"),
   conversationId: z.string().uuid().optional(),
   speakReply: z.boolean().optional().default(false),
-  modality: z.enum(["TEXT", "VOICE"]).optional().default("TEXT"),
+  modality: z.enum(["TEXT", "VOICE", "IMAGE"]).optional().default("TEXT"),
 });
 
 const confirmBodySchema = z.object({

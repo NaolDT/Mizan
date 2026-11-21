@@ -65,6 +65,7 @@ enum TransactionSource {
   VOICE
   CHAT
   MANUAL
+  CAMERA
 }
 
 enum TransactionStatus {
@@ -80,6 +81,7 @@ enum MessageRole {
 enum MessageModality {
   TEXT
   VOICE
+  IMAGE
 }
 
 enum ActionStatus {
@@ -137,6 +139,7 @@ model User {
   referralReceived  Referral?        @relation("ReferredRelation")
   rewardEntries     RewardLedger[]
   stockMovements    StockMovement[]
+  priceChanges      ProductPriceHistory[]
 
   @@map("users")
 }
@@ -161,6 +164,8 @@ model Business {
   products          Product[]
   stockMovements    StockMovement[]
   customerLedger    CustomerLedger[]
+  priceHistory      ProductPriceHistory[]
+  recognitionHints  ProductRecognitionHint[]
 
   voiceRepliesUsed    Int       @default(0) @map("voice_replies_used")
   voiceBonusReplies   Int       @default(0) @map("voice_bonus_replies")
@@ -329,21 +334,67 @@ model Product {
   businessId         String          @map("business_id") @db.Uuid
   name               String          @db.VarChar(120)
   nameKey            String          @map("name_key") @db.VarChar(120)
+  brand              String?         @db.VarChar(80)
+  sizeLabel          String?         @map("size_label") @db.VarChar(40)
+  categoryLabel      String?         @map("category_label") @db.VarChar(40)
+  barcode            String?         @db.VarChar(64)
+  aliases            String?         @db.VarChar(280)
   unit               String          @default("pcs") @db.VarChar(24)
   quantityOnHand     Decimal         @default(0) @map("quantity_on_hand") @db.Decimal(12, 2)
   lowStockThreshold  Decimal         @default(0) @map("low_stock_threshold") @db.Decimal(12, 2)
   sellingPrice       Decimal?        @map("selling_price") @db.Decimal(12, 2)
   costPrice          Decimal?        @map("cost_price") @db.Decimal(12, 2)
+  imageMime          String?         @map("image_mime") @db.VarChar(40)
+  imageBytes         Bytes?          @map("image_bytes")
   createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   business           Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   movements          StockMovement[]
   transactions       Transaction[]
+  priceHistory       ProductPriceHistory[]
+  recognitionHints   ProductRecognitionHint[]
 
   @@unique([businessId, nameKey])
   @@index([businessId, name])
+  @@index([businessId, barcode])
   @@map("products")
+}
+
+model ProductPriceHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  businessId     String   @map("business_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  recordedById   String   @map("recorded_by_id") @db.Uuid
+  sellingPrice   Decimal? @map("selling_price") @db.Decimal(12, 2)
+  costPrice      Decimal? @map("cost_price") @db.Decimal(12, 2)
+  previousSelling Decimal? @map("previous_selling") @db.Decimal(12, 2)
+  previousCost   Decimal? @map("previous_cost") @db.Decimal(12, 2)
+  note           String?  @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  recordedBy     User     @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt(sort: Desc)])
+  @@map("product_price_history")
+}
+
+model ProductRecognitionHint {
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  barcode       String?  @db.VarChar(64)
+  detectedName  String   @map("detected_name") @db.VarChar(160)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, detectedName])
+  @@index([businessId, barcode])
+  @@map("product_recognition_hints")
 }
 
 model StockMovement {

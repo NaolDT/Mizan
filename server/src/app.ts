@@ -14,6 +14,7 @@ import { businessRouter } from "./modules/business/business.routes.js";
 import { rewardsRouter } from "./modules/rewards/rewards.routes.js";
 import { subscriptionRouter } from "./modules/subscription/subscription.routes.js";
 import { transactionRouter } from "./modules/transactions/transaction.routes.js";
+import { visionRouter } from "./modules/vision/vision.routes.js";
 import { voiceRouter } from "./modules/voice/voice.routes.js";
 import { sendSuccess } from "./utils/apiResponse.js";
 import { formatEatIsoTimestamp } from "./utils/eatDate.js";
@@ -74,6 +75,7 @@ export function createApp() {
   app.use("/api/v1/rewards", rewardsRouter);
   app.use("/api/v1/customers", customersRouter);
   app.use("/api/v1/inventory", inventoryRouter);
+  app.use("/api/v1/vision", visionRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

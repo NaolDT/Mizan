@@ -26,11 +26,16 @@ function mapProductDto(product: Product): ProductDto {
     id: product.id,
     businessId: product.businessId,
     name: product.name,
+    brand: product.brand,
+    sizeLabel: product.sizeLabel,
+    categoryLabel: product.categoryLabel,
+    barcode: product.barcode,
     unit: product.unit,
     quantityOnHand: qty,
     lowStockThreshold: threshold,
-    sellingPrice: product.sellingPrice ? toNumber2(product.sellingPrice) : null,
-    costPrice: product.costPrice ? toNumber2(product.costPrice) : null,
+    sellingPrice: product.sellingPrice != null ? toNumber2(product.sellingPrice) : null,
+    costPrice: product.costPrice != null ? toNumber2(product.costPrice) : null,
+    hasImage: Boolean(product.imageBytes && product.imageBytes.length > 0),
     isLowStock: threshold > 0 && qty <= threshold,
     createdAt: product.createdAt.toISOString(),
   };
@@ -52,9 +57,42 @@ export async function getProduct(businessId: string, productId: string): Promise
   return mapProductDto(product);
 }
 
+function optionalText(value: string | null | undefined, max = 80): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed ? trimmed.slice(0, max) : null;
+}
+
+async function recordPriceHistory(params: {
+  businessId: string;
+  productId: string;
+  recordedById?: string;
+  sellingPrice: Prisma.Decimal | null;
+  costPrice: Prisma.Decimal | null;
+  previousSelling: Prisma.Decimal | null;
+  previousCost: Prisma.Decimal | null;
+}): Promise<void> {
+  if (!params.recordedById) return;
+  const sellingChanged =
+    String(params.sellingPrice ?? "") !== String(params.previousSelling ?? "");
+  const costChanged = String(params.costPrice ?? "") !== String(params.previousCost ?? "");
+  if (!sellingChanged && !costChanged) return;
+  await prisma.productPriceHistory.create({
+    data: {
+      businessId: params.businessId,
+      productId: params.productId,
+      recordedById: params.recordedById,
+      sellingPrice: params.sellingPrice,
+      costPrice: params.costPrice,
+      previousSelling: params.previousSelling,
+      previousCost: params.previousCost,
+    },
+  });
+}
+
 export async function createProduct(
   businessId: string,
-  input: CreateProductRequest
+  input: CreateProductRequest,
+  recordedById?: string
 ): Promise<ProductDto> {
   const name = input.name.trim();
   if (name.length < 1) throw new AppError(400, "INVALID_NAME", "Product name is required");
@@ -62,19 +100,37 @@ export async function createProduct(
   const qty = new Prisma.Decimal((input.quantityOnHand ?? 0).toFixed(2));
   if (qty.lt(0)) throw new AppError(400, "INVALID_QUANTITY", "Starting quantity cannot be negative");
 
+  const sellingPrice =
+    input.sellingPrice != null ? new Prisma.Decimal(input.sellingPrice.toFixed(2)) : null;
+  const costPrice =
+    input.costPrice != null ? new Prisma.Decimal(input.costPrice.toFixed(2)) : null;
+
   try {
     const created = await prisma.product.create({
       data: {
         businessId,
         name,
         nameKey: toNameKey(name),
+        brand: optionalText(input.brand),
+        sizeLabel: optionalText(input.sizeLabel, 40),
+        categoryLabel: optionalText(input.categoryLabel, 40),
+        barcode: optionalText(input.barcode, 64),
+        aliases: optionalText(input.aliases, 280),
         unit: input.unit?.trim() || "pcs",
         quantityOnHand: qty,
         lowStockThreshold: new Prisma.Decimal((input.lowStockThreshold ?? 0).toFixed(2)),
-        sellingPrice:
-          input.sellingPrice != null ? new Prisma.Decimal(input.sellingPrice.toFixed(2)) : null,
-        costPrice: input.costPrice != null ? new Prisma.Decimal(input.costPrice.toFixed(2)) : null,
+        sellingPrice,
+        costPrice,
       },
+    });
+    await recordPriceHistory({
+      businessId,
+      productId: created.id,
+      recordedById,
+      sellingPrice,
+      costPrice,
+      previousSelling: null,
+      previousCost: null,
     });
     return mapProductDto(created);
   } catch (err) {
@@ -88,7 +144,8 @@ export async function createProduct(
 export async function updateProduct(
   businessId: string,
   productId: string,
-  input: UpdateProductRequest
+  input: UpdateProductRequest,
+  recordedById?: string
 ): Promise<ProductDto> {
   const existing = await prisma.product.findFirst({
     where: { id: productId, businessId },
@@ -96,31 +153,81 @@ export async function updateProduct(
   if (!existing) throw new AppError(404, "PRODUCT_NOT_FOUND", "Product not found");
 
   const name = input.name?.trim();
+  const nextSelling =
+    input.sellingPrice === undefined
+      ? existing.sellingPrice
+      : input.sellingPrice == null
+        ? null
+        : new Prisma.Decimal(input.sellingPrice.toFixed(2));
+  const nextCost =
+    input.costPrice === undefined
+      ? existing.costPrice
+      : input.costPrice == null
+        ? null
+        : new Prisma.Decimal(input.costPrice.toFixed(2));
+
   const updated = await prisma.product.update({
     where: { id: existing.id },
     data: {
       ...(name ? { name, nameKey: toNameKey(name) } : {}),
+      ...(input.brand !== undefined ? { brand: optionalText(input.brand) } : {}),
+      ...(input.sizeLabel !== undefined ? { sizeLabel: optionalText(input.sizeLabel, 40) } : {}),
+      ...(input.categoryLabel !== undefined
+        ? { categoryLabel: optionalText(input.categoryLabel, 40) }
+        : {}),
+      ...(input.barcode !== undefined ? { barcode: optionalText(input.barcode, 64) } : {}),
+      ...(input.aliases !== undefined ? { aliases: optionalText(input.aliases, 280) } : {}),
       ...(input.unit !== undefined ? { unit: input.unit.trim() || "pcs" } : {}),
       ...(input.lowStockThreshold !== undefined
         ? { lowStockThreshold: new Prisma.Decimal(input.lowStockThreshold.toFixed(2)) }
         : {}),
-      ...(input.sellingPrice !== undefined
-        ? {
-            sellingPrice:
-              input.sellingPrice == null
-                ? null
-                : new Prisma.Decimal(input.sellingPrice.toFixed(2)),
-          }
-        : {}),
-      ...(input.costPrice !== undefined
-        ? {
-            costPrice:
-              input.costPrice == null ? null : new Prisma.Decimal(input.costPrice.toFixed(2)),
-          }
-        : {}),
+      ...(input.sellingPrice !== undefined ? { sellingPrice: nextSelling } : {}),
+      ...(input.costPrice !== undefined ? { costPrice: nextCost } : {}),
     },
   });
+  await recordPriceHistory({
+    businessId,
+    productId: existing.id,
+    recordedById,
+    sellingPrice: nextSelling,
+    costPrice: nextCost,
+    previousSelling: existing.sellingPrice,
+    previousCost: existing.costPrice,
+  });
   return mapProductDto(updated);
+}
+
+export async function saveProductImage(
+  businessId: string,
+  productId: string,
+  bytes: Buffer,
+  mime: string
+): Promise<ProductDto> {
+  if (bytes.length > 400_000) {
+    throw new AppError(400, "IMAGE_TOO_LARGE", "Product photo must be a small thumbnail");
+  }
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, businessId },
+    select: { id: true },
+  });
+  if (!existing) throw new AppError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  const updated = await prisma.product.update({
+    where: { id: existing.id },
+    data: { imageBytes: Uint8Array.from(bytes), imageMime: mime.slice(0, 40) },
+  });
+  return mapProductDto(updated);
+}
+
+export async function getProductImage(
+  businessId: string,
+  productId: string
+): Promise<{ mime: string; bytes: Buffer } | null> {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, businessId },
+    select: { imageBytes: true, imageMime: true },
+  });
+  if (!product?.imageBytes || !product.imageMime) return null;
+  return { mime: product.imageMime, bytes: Buffer.from(product.imageBytes) };
 }
 
 export async function findProductByName(

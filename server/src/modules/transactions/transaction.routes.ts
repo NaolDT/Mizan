@@ -55,7 +55,7 @@ const createTxSchema = z.object({
   productId: z.string().uuid().nullable().optional(),
   quantity: z.coerce.number().positive().max(1_000_000).nullable().optional(),
   transactionDate: z.string().optional(),
-  source: z.enum(["VOICE", "CHAT", "MANUAL"]).optional(),
+  source: z.enum(["VOICE", "CHAT", "MANUAL", "CAMERA"]).optional(),
   idempotencyKey: z.string().min(4).max(80),
 });
 

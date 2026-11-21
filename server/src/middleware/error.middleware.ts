@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import { ZodError } from "zod";
 import { AppError, sendError } from "../utils/apiResponse.js";
 
@@ -19,6 +20,15 @@ export function errorHandler(
 
   if (err instanceof ZodError) {
     sendError(res, 400, "VALIDATION_ERROR", "Invalid request payload", err.flatten());
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      sendError(res, 413, "IMAGE_TOO_LARGE", "Photo must be under 4MB");
+      return;
+    }
+    sendError(res, 400, "UPLOAD_FAILED", "Could not read the photo");
     return;
   }
 

@@ -9,6 +9,7 @@ import {
   deleteProduct,
   getInventoryValuation,
   getProduct,
+  getProductImage,
   getProductProfitability,
   listMovements,
   listProducts,
@@ -23,6 +24,11 @@ const optionalMoney = z.number().nonnegative().nullable().optional();
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
+  brand: z.string().max(80).nullable().optional(),
+  sizeLabel: z.string().max(40).nullable().optional(),
+  categoryLabel: z.string().max(40).nullable().optional(),
+  barcode: z.string().max(64).nullable().optional(),
+  aliases: z.string().max(280).nullable().optional(),
   unit: z.string().max(24).optional(),
   quantityOnHand: z.number().min(0).optional(),
   lowStockThreshold: z.number().min(0).optional(),
@@ -78,6 +84,21 @@ inventoryRouter.get("/valuation", async (req, res, next) => {
   }
 });
 
+inventoryRouter.get("/:id/image", async (req, res, next) => {
+  try {
+    const image = await getProductImage(req.tenant!.businessId, req.params.id);
+    if (!image) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Content-Type", image.mime);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(image.bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
 inventoryRouter.get("/:id", async (req, res, next) => {
   try {
     sendSuccess(res, await getProduct(req.tenant!.businessId, req.params.id));
@@ -89,7 +110,7 @@ inventoryRouter.get("/:id", async (req, res, next) => {
 inventoryRouter.post("/", async (req, res, next) => {
   try {
     const body = createSchema.parse(req.body);
-    sendSuccess(res, await createProduct(req.tenant!.businessId, body), 201);
+    sendSuccess(res, await createProduct(req.tenant!.businessId, body, req.tenant!.userId), 201);
   } catch (err) {
     next(err);
   }
@@ -98,7 +119,10 @@ inventoryRouter.post("/", async (req, res, next) => {
 inventoryRouter.patch("/:id", async (req, res, next) => {
   try {
     const body = updateSchema.parse(req.body);
-    sendSuccess(res, await updateProduct(req.tenant!.businessId, req.params.id, body));
+    sendSuccess(
+      res,
+      await updateProduct(req.tenant!.businessId, req.params.id, body, req.tenant!.userId)
+    );
   } catch (err) {
     next(err);
   }

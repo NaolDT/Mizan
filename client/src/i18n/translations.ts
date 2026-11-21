@@ -41,6 +41,7 @@ export interface UiDictionary {
   recordIncome: string;
   recordExpense: string;
   askMizan: string;
+  capturePhoto: string;
   cashFlowChartTitle: string;
   expenseBreakdownTitle: string;
   recentTransactionsTitle: string;
@@ -123,6 +124,7 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     recordIncome: "ገቢ መዝግብ",
     recordExpense: "ወጪ መዝግብ",
     askMizan: "Mizan ን በድምፅ ጠይቅ",
+    capturePhoto: "ፎቶ አንሳ",
     cashFlowChartTitle: "የዕለታዊ ገቢ እና ወጪ እንቅስቃሴ (ETB)",
     expenseBreakdownTitle: "የወጪ ክፍፍል በምድብ",
     recentTransactionsTitle: "የቅርብ ጊዜ እንቅስቃሴዎች",
@@ -234,6 +236,7 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     recordIncome: "Galii Galmeessi",
     recordExpense: "Baasii Galmeessi",
     askMizan: "Mizan Sagaleen Gaafadhu",
+    capturePhoto: "Suuraa kaasi",
     cashFlowChartTitle: "Sochii Galii fi Baasii Guyyaa (ETB)",
     expenseBreakdownTitle: "Qoqqoodinsa Baasii Ramaddiidhaan",
     recentTransactionsTitle: "Sochiilee Dhihoo",
@@ -345,6 +348,7 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     recordIncome: "Record Income",
     recordExpense: "Record Expense",
     askMizan: "Voice / Ask Mizan",
+    capturePhoto: "Capture photo",
     cashFlowChartTitle: "Daily Income vs. Expenses (ETB)",
     expenseBreakdownTitle: "Expense Breakdown by Category",
     recentTransactionsTitle: "Recent Transactions",

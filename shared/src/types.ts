@@ -37,7 +37,7 @@ export type TransactionCategory = IncomeCategory | ExpenseCategory;
 
 export type PaymentMethod = "CASH" | "TELEBIRR" | "BANK" | "CREDIT";
 
-export type TransactionSource = "VOICE" | "CHAT" | "MANUAL";
+export type TransactionSource = "VOICE" | "CHAT" | "MANUAL" | "CAMERA";
 
 export type TransactionStatus = "COMPLETED" | "VOIDED";
 
@@ -45,7 +45,7 @@ export type DateRangePreset = "today" | "week" | "month" | "all";
 
 export type MessageRole = "USER" | "ASSISTANT";
 
-export type MessageModality = "TEXT" | "VOICE";
+export type MessageModality = "TEXT" | "VOICE" | "IMAGE";
 
 export type ActionStatus =
   | "NONE"
@@ -522,11 +522,16 @@ export interface ProductDto {
   id: string;
   businessId: string;
   name: string;
+  brand: string | null;
+  sizeLabel: string | null;
+  categoryLabel: string | null;
+  barcode: string | null;
   unit: string;
   quantityOnHand: number;
   lowStockThreshold: number;
   sellingPrice: number | null;
   costPrice: number | null;
+  hasImage: boolean;
   isLowStock: boolean;
   createdAt: string;
 }
@@ -544,6 +549,11 @@ export interface StockMovementDto {
 
 export interface CreateProductRequest {
   name: string;
+  brand?: string | null;
+  sizeLabel?: string | null;
+  categoryLabel?: string | null;
+  barcode?: string | null;
+  aliases?: string | null;
   unit?: string;
   quantityOnHand?: number;
   lowStockThreshold?: number;
@@ -553,6 +563,11 @@ export interface CreateProductRequest {
 
 export interface UpdateProductRequest {
   name?: string;
+  brand?: string | null;
+  sizeLabel?: string | null;
+  categoryLabel?: string | null;
+  barcode?: string | null;
+  aliases?: string | null;
   unit?: string;
   lowStockThreshold?: number;
   sellingPrice?: number | null;
@@ -598,4 +613,84 @@ export interface BusinessInsightsDto {
   lowStockCount: number;
   customersOwingCount: number;
   outstandingTotal: number;
+}
+
+export type VisionWorkflow =
+  | "QUICK_SALE"
+  | "ADD_INVENTORY"
+  | "SCAN_RECEIPT"
+  | "IDENTIFY"
+  | "GENERAL";
+
+export type VisionMatchConfidence = "high" | "medium" | "low" | "none";
+
+export interface VisionDetectedItem {
+  detectedName: string;
+  brand: string | null;
+  sizeLabel: string | null;
+  barcode: string | null;
+  quantityGuess: number;
+  ocrText: string | null;
+  match: {
+    productId: string | null;
+    productName: string | null;
+    confidence: VisionMatchConfidence;
+    score: number;
+    sellingPrice: number | null;
+    costPrice: number | null;
+    quantityOnHand: number | null;
+    unit: string | null;
+    alternatives: Array<{ productId: string; productName: string; score: number }>;
+  };
+}
+
+export interface VisionReceiptSummary {
+  supplier: string | null;
+  date: string | null;
+  total: number | null;
+}
+
+export interface VisionAnalyzeResponse {
+  workflow: VisionWorkflow;
+  intentGuess: VisionWorkflow;
+  items: VisionDetectedItem[];
+  receipt: VisionReceiptSummary | null;
+  catalogSize: number;
+  provider: string;
+  note: string | null;
+}
+
+export interface VisionSaleLineRequest {
+  productId?: string | null;
+  quantity: number;
+  unitPriceOverride?: number | null;
+  unmatchedAmount?: number | null;
+  description: string;
+  detectedName?: string | null;
+  barcode?: string | null;
+}
+
+export interface VisionConfirmSaleRequest {
+  idempotencyKey: string;
+  paymentMethod?: PaymentMethod;
+  customerName?: string | null;
+  lines: VisionSaleLineRequest[];
+}
+
+export interface VisionConfirmPurchaseRequest {
+  idempotencyKey: string;
+  paymentMethod?: PaymentMethod;
+  supplierName?: string | null;
+  lines: Array<{
+    productId?: string | null;
+    quantity: number;
+    unitCost: number;
+    description: string;
+    detectedName?: string | null;
+  }>;
+}
+
+export interface VisionConfirmResult {
+  transactions: TransactionDto[];
+  totalAmount: number;
 }

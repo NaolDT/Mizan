@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Camera, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   AdjustStockRequest,
   CreateProductRequest,
@@ -15,7 +15,7 @@ import { SHOP_TEXT } from "../i18n/shopText";
 import { apiRequest } from "../lib/api";
 import { formatEtb, formatShortDate } from "../lib/format";
 
-export function InventoryPanel() {
+export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }) {
   const { language } = useLanguage();
   const text = SHOP_TEXT[language];
   const queryClient = useQueryClient();
@@ -28,6 +28,9 @@ export function InventoryPanel() {
   const [threshold, setThreshold] = useState("5");
   const [sellingPrice, setSellingPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
+  const [brand, setBrand] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [sizeLabel, setSizeLabel] = useState("");
   const [adjusting, setAdjusting] = useState<{ id: string; sign: 1 | -1 } | null>(null);
   const [adjustQty, setAdjustQty] = useState("1");
 
@@ -57,6 +60,9 @@ export function InventoryPanel() {
     setThreshold("5");
     setSellingPrice("");
     setCostPrice("");
+    setBrand("");
+    setBarcode("");
+    setSizeLabel("");
   };
 
   const startEdit = (product: ProductDto) => {
@@ -68,6 +74,9 @@ export function InventoryPanel() {
     setThreshold(String(product.lowStockThreshold));
     setSellingPrice(product.sellingPrice != null ? String(product.sellingPrice) : "");
     setCostPrice(product.costPrice != null ? String(product.costPrice) : "");
+    setBrand(product.brand ?? "");
+    setBarcode(product.barcode ?? "");
+    setSizeLabel(product.sizeLabel ?? "");
   };
 
   const createMutation = useMutation({
@@ -125,9 +134,13 @@ export function InventoryPanel() {
     },
   });
 
-  const products = (productsQuery.data ?? []).filter((product) =>
-    product.name.toLowerCase().includes(search.trim().toLowerCase())
-  );
+  const products = (productsQuery.data ?? []).filter((product) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [product.name, product.brand, product.barcode, product.sizeLabel]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(q));
+  });
   const movements = movementsQuery.data ?? [];
   const profits = profitQuery.data ?? [];
   const valuation = valuationQuery.data;
@@ -136,17 +149,29 @@ export function InventoryPanel() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-slate-800">{text.addProduct}</h2>
-        <button
-          type="button"
-          onClick={() => {
-            if (showForm) resetForm();
-            else setShowForm(true);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
-        >
-          <Plus className="h-4 w-4" />
-          {text.addProduct}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {onScanProduct && (
+            <button
+              type="button"
+              onClick={onScanProduct}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-800"
+            >
+              <Camera className="h-4 w-4" />
+              {text.scanProduct}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (showForm) resetForm();
+              else setShowForm(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+          >
+            <Plus className="h-4 w-4" />
+            {text.addProduct}
+          </button>
+        </div>
       </div>
 
       {valuation && valuation.productCount > 0 && (
@@ -171,6 +196,9 @@ export function InventoryPanel() {
             const payload = {
               name,
               unit,
+              brand: brand.trim() || null,
+              barcode: barcode.trim() || null,
+              sizeLabel: sizeLabel.trim() || null,
               lowStockThreshold: Number(threshold) || 0,
               sellingPrice: sellingPrice ? Number(sellingPrice) : null,
               costPrice: costPrice ? Number(costPrice) : null,
@@ -197,6 +225,24 @@ export function InventoryPanel() {
             onChange={(e) => setUnit(e.target.value)}
             placeholder={text.unit}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+          <input
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder={text.brand}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+          <input
+            value={sizeLabel}
+            onChange={(e) => setSizeLabel(e.target.value)}
+            placeholder={text.sizeLabel}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+          <input
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder={text.barcode}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
           />
           {!editing && (
             <input
@@ -262,7 +308,10 @@ export function InventoryPanel() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-bold text-slate-900">{product.name}</p>
-                  <p className="text-xs text-slate-500">{product.unit}</p>
+                  <p className="text-xs text-slate-500">
+                    {[product.brand, product.sizeLabel, product.unit].filter(Boolean).join(" · ")}
+                    {product.barcode ? ` · ${product.barcode}` : ""}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1">
                   {product.isLowStock && (

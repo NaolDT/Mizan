@@ -250,6 +250,58 @@ export async function loginOrProvisionDemoMerchant(): Promise<AuthResponse> {
     });
   }
 
+  const existingProductCount = await prisma.product.count({
+    where: { businessId: demoBusiness.id },
+  });
+  if (existingProductCount === 0) {
+    await prisma.product.createMany({
+      data: [
+        {
+          businessId: demoBusiness.id,
+          name: "Sunflower Cooking Oil 1L",
+          nameKey: "sunflower cooking oil 1l",
+          brand: "Sunflower",
+          sizeLabel: "1L",
+          categoryLabel: "Food",
+          barcode: "6291001012345",
+          unit: "bottle",
+          quantityOnHand: 24,
+          lowStockThreshold: 5,
+          sellingPrice: 180,
+          costPrice: 150,
+        },
+        {
+          businessId: demoBusiness.id,
+          name: "Sugar 1kg",
+          nameKey: "sugar 1kg",
+          brand: null,
+          sizeLabel: "1kg",
+          categoryLabel: "Food",
+          barcode: null,
+          unit: "pack",
+          quantityOnHand: 40,
+          lowStockThreshold: 8,
+          sellingPrice: 150,
+          costPrice: 130,
+        },
+        {
+          businessId: demoBusiness.id,
+          name: "Laundry Soap",
+          nameKey: "laundry soap",
+          brand: null,
+          sizeLabel: null,
+          categoryLabel: "Household",
+          barcode: null,
+          unit: "bar",
+          quantityOnHand: 50,
+          lowStockThreshold: 10,
+          sellingPrice: 45,
+          costPrice: 30,
+        },
+      ],
+    });
+  }
+
   const existingTxCount = await prisma.transaction.count({
     where: { businessId: demoBusiness.id },
   });

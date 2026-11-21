@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Camera,
   Check,
   Loader2,
   Mic,
@@ -344,6 +345,7 @@ interface AssistantDrawerProps {
   onAutoStartConsumed?: () => void;
   onClose: () => void;
   onOpenRewards?: () => void;
+  onOpenCamera?: () => void;
 }
 
 export function AssistantDrawer({
@@ -352,6 +354,7 @@ export function AssistantDrawer({
   onAutoStartConsumed,
   onClose,
   onOpenRewards,
+  onOpenCamera,
 }: AssistantDrawerProps) {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
@@ -844,6 +847,17 @@ export function AssistantDrawer({
                 </>
               )}
             </button>
+            {onOpenCamera && (
+              <button
+                type="button"
+                disabled={isRecording || isBusy}
+                onClick={onOpenCamera}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-sm font-bold text-emerald-800 disabled:opacity-50"
+              >
+                <Camera className="h-4 w-4" />
+                {t.capturePhoto}
+              </button>
+            )}
             {isRecording && liveTranscript && (
               <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
                 {liveTranscript}

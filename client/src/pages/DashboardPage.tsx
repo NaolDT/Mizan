@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Camera,
   LogOut,
   MessageSquare,
   Mic,
@@ -40,6 +41,8 @@ import { CustomersPanel } from "../components/CustomersPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
+import { VisionCapture } from "../components/VisionCapture";
+import type { VisionWorkflow } from "@mizan/shared";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
@@ -72,6 +75,8 @@ export function DashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [autoStartVoice, setAutoStartVoice] = useState(false);
+  const [visionOpen, setVisionOpen] = useState(false);
+  const [visionWorkflow, setVisionWorkflow] = useState<VisionWorkflow>("QUICK_SALE");
 
   const summaryQuery = useQuery({
     queryKey: ["summary", range],
@@ -314,6 +319,18 @@ export function DashboardPage() {
 
             <button
               type="button"
+              onClick={() => {
+                setVisionWorkflow("QUICK_SALE");
+                setVisionOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-emerald-900 hover:bg-emerald-50"
+            >
+              <Camera className="h-4 w-4" />
+              <span>{t.capturePhoto}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() =>
                 setTxModalState({
                   open: true,
@@ -526,7 +543,14 @@ export function DashboardPage() {
         )}
 
         {activeTab === "rewards" && <RewardsPanel />}
-        {activeTab === "inventory" && <InventoryPanel />}
+        {activeTab === "inventory" && (
+          <InventoryPanel
+            onScanProduct={() => {
+              setVisionWorkflow("ADD_INVENTORY");
+              setVisionOpen(true);
+            }}
+          />
+        )}
         {activeTab === "customers" && <CustomersPanel />}
 
         {/* Transactions Feed / Ledger */}
@@ -674,15 +698,27 @@ export function DashboardPage() {
         )}
       </main>
 
-      {/* Floating Mobile Quick Mic Button */}
-      <button
-        type="button"
-        onClick={() => setAssistantOpen(true)}
-        className="fixed right-5 bottom-5 z-30 flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700"
-      >
-        <Mic className="h-5 w-5" />
-        <span>{t.askMizan}</span>
-      </button>
+      <div className="fixed right-5 bottom-5 z-30 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setVisionWorkflow("QUICK_SALE");
+            setVisionOpen(true);
+          }}
+          className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-800 shadow-lg"
+        >
+          <Camera className="h-5 w-5" />
+          <span>{t.capturePhoto}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setAssistantOpen(true)}
+          className="flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700"
+        >
+          <Mic className="h-5 w-5" />
+          <span>{t.askMizan}</span>
+        </button>
+      </div>
 
       {txModalState.open && (
         <TransactionModal
@@ -713,7 +749,19 @@ export function DashboardPage() {
           setAssistantOpen(false);
           setActiveTab("rewards");
         }}
+        onOpenCamera={() => {
+          setAssistantOpen(false);
+          setVisionWorkflow("QUICK_SALE");
+          setVisionOpen(true);
+        }}
       />
+
+      {visionOpen && (
+        <VisionCapture
+          initialWorkflow={visionWorkflow}
+          onClose={() => setVisionOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -41,6 +41,10 @@ export interface ShopText {
   grossProfit: string;
   stockValue: string;
   noCostYet: string;
+  barcode: string;
+  brand: string;
+  sizeLabel: string;
+  scanProduct: string;
 }
 
 const en: ShopText = {
@@ -84,6 +88,10 @@ const en: ShopText = {
   grossProfit: "Gross profit",
   stockValue: "Stock at cost",
   noCostYet: "Add a cost price to see profit.",
+  barcode: "Barcode",
+  brand: "Brand",
+  sizeLabel: "Size",
+  scanProduct: "Scan product",
 };
 
 const am: ShopText = {
@@ -127,6 +135,10 @@ const am: ShopText = {
   grossProfit: "ጠቅላላ ትርፍ",
   stockValue: "ክምችት በወጪ",
   noCostYet: "ትርፍ ለማየት የግዢ ዋጋ ያስገቡ።",
+  barcode: "ባርኮድ",
+  brand: "ብራንድ",
+  sizeLabel: "መጠን",
+  scanProduct: "እቃ ስካን",
 };
 
 const om: ShopText = {
@@ -170,6 +182,10 @@ const om: ShopText = {
   grossProfit: "Bu'aa waliigalaa",
   stockValue: "Kuufama gatii bittaa",
   noCostYet: "Bu'aa ilaaluuf gatii bittaa galchi.",
+  barcode: "Baarkoodii",
+  brand: "Brandii",
+  sizeLabel: "Hanga",
+  scanProduct: "Meeshaa scan godhi",
 };
 
 export const SHOP_TEXT: Record<LanguageCode, ShopText> = { am, om, en };
