@@ -95,6 +95,9 @@ export async function createProduct(
   input: CreateProductRequest,
   recordedById?: string
 ): Promise<ProductDto> {
+  const { assertCapacity } = await import("../billing/credit.service.js");
+  await assertCapacity(businessId, "products");
+
   const name = input.name.trim();
   if (name.length < 1) throw new AppError(400, "INVALID_NAME", "Product name is required");
 

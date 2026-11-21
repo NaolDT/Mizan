@@ -6,14 +6,13 @@ import type {
   VoiceQuotaDto,
 } from "@mizan/shared";
 import { env } from "../../config/env.js";
-import { PLAN_CONFIG, VOICE_PACK } from "../../config/plans.js";
+import { VOICE_PACK } from "../../config/plans.js";
+import { getPlanConfig, listActivePlans } from "../billing/catalog.js";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
 import { formatEatDateKey } from "../../utils/eatDate.js";
 
 export type ReplySource = "PLAN" | "BONUS";
-
-const PLAN_ORDER: SubscriptionPlan[] = ["FREE", "STARTER", "PRO", "BUSINESS"];
 
 /** Usage month in Africa/Addis_Ababa, e.g. "2026-11". */
 export function currentUsagePeriod(now: Date = new Date()): string {
@@ -42,9 +41,12 @@ export function effectivePlanOf(
   return business.plan;
 }
 
-export function toVoiceQuota(business: Business, now: Date = new Date()): VoiceQuotaDto {
+export function toVoiceQuota(
+  business: Business,
+  now: Date = new Date(),
+  monthlyAllowance = 0
+): VoiceQuotaDto {
   const effectivePlan = effectivePlanOf(business, now);
-  const monthlyAllowance = PLAN_CONFIG[effectivePlan].monthlyReplies;
   const periodIsCurrent = business.usagePeriod === currentUsagePeriod(now);
   const used = periodIsCurrent ? business.voiceRepliesUsed : 0;
   const planRemaining = Math.max(0, monthlyAllowance - used);
@@ -79,7 +81,9 @@ async function rollUsagePeriod(businessId: string): Promise<void> {
 }
 
 export async function getVoiceQuota(businessId: string): Promise<VoiceQuotaDto> {
-  return toVoiceQuota(await loadBusiness(businessId));
+  const business = await loadBusiness(businessId);
+  const plan = await getPlanConfig(effectivePlanOf(business));
+  return toVoiceQuota(business, new Date(), plan.monthlyReplies);
 }
 
 /**
@@ -91,7 +95,7 @@ export async function reserveVoiceReply(
 ): Promise<{ source: ReplySource | null; quota: VoiceQuotaDto }> {
   await rollUsagePeriod(businessId);
   const business = await loadBusiness(businessId);
-  const allowance = PLAN_CONFIG[effectivePlanOf(business)].monthlyReplies;
+  const allowance = (await getPlanConfig(effectivePlanOf(business))).monthlyReplies;
 
   const planClaim = await prisma.business.updateMany({
     where: { id: businessId, voiceRepliesUsed: { lt: allowance } },
@@ -109,7 +113,7 @@ export async function reserveVoiceReply(
     if (bonusClaim.count === 1) source = "BONUS";
   }
 
-  return { source, quota: await getVoiceQuota(businessId) };
+  return { source, quota: toVoiceQuota(await loadBusiness(businessId), new Date(), allowance) };
 }
 
 /** Gives a reply back when speech could not actually be produced. */
@@ -141,12 +145,14 @@ export async function getSubscriptionSummary(
   businessId: string
 ): Promise<SubscriptionSummaryDto> {
   const business = await loadBusiness(businessId);
+  const plans = await listActivePlans();
+  const current = plans.find((plan) => plan.plan === effectivePlanOf(business)) ?? (await getPlanConfig(effectivePlanOf(business)));
   return {
-    quota: toVoiceQuota(business),
-    plans: PLAN_ORDER.map((plan) => ({
-      plan,
-      priceEtb: PLAN_CONFIG[plan].priceEtb,
-      monthlyReplies: PLAN_CONFIG[plan].monthlyReplies,
+    quota: toVoiceQuota(business, new Date(), current.monthlyReplies),
+    plans: plans.map((plan) => ({
+      plan: plan.plan,
+      priceEtb: plan.priceEtb.toNumber(),
+      monthlyReplies: plan.monthlyReplies,
     })),
     voicePack: { ...VOICE_PACK },
     nextBillDiscountPct: business.nextBillDiscountPct,
@@ -178,7 +184,11 @@ export async function changePlan(
   assertManualBilling();
   const business = await loadBusiness(businessId);
 
-  const price = PLAN_CONFIG[plan].priceEtb;
+  const config = await getPlanConfig(plan);
+  if (!config.active) {
+    throw new AppError(400, "PLAN_UNAVAILABLE", "That plan is not available.");
+  }
+  const price = config.priceEtb.toNumber();
   const discountPct = price > 0 ? business.nextBillDiscountPct : 0;
   const charged = applyDiscount(price, discountPct);
 

@@ -29,6 +29,13 @@ const envSchema = z.object({
   ADDIS_BASE_URL: z.string().default("https://api.addisassistant.com/api/v1"),
   ADDIS_VOICE_AM: z.string().default("am-hamen"),
   ADDIS_VOICE_OM: z.string().default("om-bikila"),
+  // Public base URL of this API, no trailing slash. Chapa calls it back here.
+  PUBLIC_API_URL: z.string().optional().default(""),
+  CHAPA_SECRET_KEY: z.string().optional().default(""),
+  CHAPA_WEBHOOK_SECRET: z.string().optional().default(""),
+  CHAPA_BASE_URL: z.string().default("https://api.chapa.co/v1"),
+  // Platform billing admin API. Empty disables those routes. Never sent to the client.
+  BILLING_ADMIN_KEY: z.string().optional().default(""),
 });
 
 const parsed = envSchema.safeParse({

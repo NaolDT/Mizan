@@ -1,6 +1,6 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express from "express";
+import express, { type Request } from "express";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
@@ -15,6 +15,8 @@ import { rewardsRouter } from "./modules/rewards/rewards.routes.js";
 import { subscriptionRouter } from "./modules/subscription/subscription.routes.js";
 import { transactionRouter } from "./modules/transactions/transaction.routes.js";
 import { visionRouter } from "./modules/vision/vision.routes.js";
+import { billingAdminRouter } from "./modules/billing/billing.admin.routes.js";
+import { billingRouter } from "./modules/billing/billing.routes.js";
 import { voiceRouter } from "./modules/voice/voice.routes.js";
 import { sendSuccess } from "./utils/apiResponse.js";
 import { formatEatIsoTimestamp } from "./utils/eatDate.js";
@@ -32,7 +34,14 @@ export function createApp() {
   );
 
   app.use(cookieParser());
-  app.use(express.json({ limit: "2mb" }));
+  app.use(
+    express.json({
+      limit: "2mb",
+      verify: (req, _res, buf) => {
+        (req as Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    })
+  );
 
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -76,6 +85,8 @@ export function createApp() {
   app.use("/api/v1/customers", customersRouter);
   app.use("/api/v1/inventory", inventoryRouter);
   app.use("/api/v1/vision", visionRouter);
+  app.use("/api/v1/billing/admin", billingAdminRouter);
+  app.use("/api/v1/billing", billingRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

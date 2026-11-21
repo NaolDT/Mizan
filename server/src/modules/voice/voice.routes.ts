@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import { processAssistantTurn } from "../ai/ai.service.js";
+import { reserveAndRun } from "../billing/credit.service.js";
 import { synthesizeMeteredSpeech } from "./voice.metered.js";
 import { transcribeSpeechBuffer } from "./voice.service.js";
 
@@ -67,15 +68,22 @@ voiceRouter.post("/interact", upload.single("audio"), async (req, res, next) => 
       );
     }
 
-    const aiTurn = await processAssistantTurn({
+    const aiTurn = await reserveAndRun({
       businessId: req.tenant!.businessId,
       userId: req.tenant!.userId,
-      text: transcript,
-      rawTranscript: transcript,
-      language,
-      modality: "VOICE",
-      conversationId: fields.conversationId || undefined,
-      speakReply: false,
+      feature: "VOICE_TURN",
+      provider: "gemini",
+      run: () =>
+        processAssistantTurn({
+          businessId: req.tenant!.businessId,
+          userId: req.tenant!.userId,
+          text: transcript,
+          rawTranscript: transcript,
+          language,
+          modality: "VOICE",
+          conversationId: fields.conversationId || undefined,
+          speakReply: false,
+        }),
     });
 
     const response: VoiceTurnResponse = {

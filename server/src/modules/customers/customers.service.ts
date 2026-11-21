@@ -80,6 +80,9 @@ export async function createCustomer(
   businessId: string,
   input: CreateCustomerRequest
 ): Promise<CustomerDto> {
+  const { assertCapacity } = await import("../billing/credit.service.js");
+  await assertCapacity(businessId, "customers");
+
   const name = input.name.trim();
   if (name.length < 2) {
     throw new AppError(400, "INVALID_NAME", "Customer name is too short");

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
+import { reserveAndRun } from "../billing/credit.service.js";
 import { saveProductImage } from "../inventory/inventory.service.js";
 import {
   analyzeBusinessImage,
@@ -98,13 +99,20 @@ visionRouter.post("/analyze", upload.single("image"), async (req, res, next) => 
       throw new AppError(400, "UNSUPPORTED_IMAGE", "Use a JPEG, PNG or WebP photo");
     }
     const fields = analyzeFields.parse(req.body);
-    const result = await analyzeBusinessImage({
+    const result = await reserveAndRun({
       businessId: req.tenant!.businessId,
-      imageBuffer: req.file.buffer,
-      mimeType: mime === "image/jpg" ? "image/jpeg" : mime,
-      workflow: fields.workflow,
-      language: fields.language,
-      clientBarcode: fields.barcode,
+      userId: req.tenant!.userId,
+      feature: fields.workflow === "SCAN_RECEIPT" ? "RECEIPT" : "VISION",
+      provider: "gemini",
+      run: () =>
+        analyzeBusinessImage({
+          businessId: req.tenant!.businessId,
+          imageBuffer: req.file!.buffer,
+          mimeType: mime === "image/jpg" ? "image/jpeg" : mime,
+          workflow: fields.workflow,
+          language: fields.language,
+          clientBarcode: fields.barcode,
+        }),
     });
     sendSuccess(res, result);
   } catch (err) {

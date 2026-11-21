@@ -26,6 +26,8 @@ Have these three values ready. They are in `server/.env` on the development mach
 
 Do **not** copy `JWT_SECRET` from `server/.env`. Render generates a private one. The API refuses to start in production if `JWT_SECRET` is missing or is one of the example values published in this repository.
 
+AI credits also need `PUBLIC_API_URL` (set in `render.yaml`), and, when you are ready to take payment, `CHAPA_SECRET_KEY` plus an optional `CHAPA_WEBHOOK_SECRET`. `BILLING_ADMIN_KEY` unlocks the billing admin API. Details are in `docs/MIZAN_MONETIZATION_SYSTEM.md`. Until the Chapa key is set, shops still receive the free monthly credits and no payment button is shown.
+
 ## Step 1 — Choose the database
 
 The existing Neon database already has the current schema, so it works as is. It also holds everything created during development: the demo shop, test accounts and test transactions.

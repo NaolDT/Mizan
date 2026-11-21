@@ -704,3 +704,161 @@ export interface VisionConfirmResult {
   transactions: TransactionDto[];
   totalAmount: number;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI credit wallet, top-ups and payments
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CreditSource = "SUBSCRIPTION" | "PURCHASED" | "REFERRAL" | "PROMO" | "ADMIN";
+
+export type CreditEntryType =
+  | "ALLOCATION"
+  | "USAGE"
+  | "TOPUP"
+  | "REFERRAL_REWARD"
+  | "PROMO_REWARD"
+  | "ADMIN_GRANT"
+  | "ADMIN_DEBIT"
+  | "EXPIRATION"
+  | "REFUND";
+
+export type BillingProviderCode = "CHAPA" | "DEV";
+
+export type BillingPaymentStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "PAID"
+  | "FAILED"
+  | "CANCELLED"
+  | "REFUNDED";
+
+export type BillingPaymentPurpose = "SUBSCRIPTION" | "TOPUP";
+
+export type AiCreditFeature = "TEXT_CHAT" | "VOICE_TURN" | "TTS" | "VISION" | "RECEIPT";
+
+export type BillingNoticeKind =
+  | "LOW_CREDITS"
+  | "TOPUP_PAID"
+  | "SUBSCRIPTION_PAID"
+  | "CREDITS_EXPIRED"
+  | "PAYMENT_FAILED"
+  | "REFERRAL_CREDITS"
+  | "PROMO_CREDITS"
+  | "SUBSCRIPTION_ENDED";
+
+export type SubscriptionStatus = "FREE" | "ACTIVE" | "CANCEL_SCHEDULED" | "EXPIRED";
+
+export interface CreditBalanceDto {
+  source: CreditSource;
+  remaining: number;
+  expiringWithin7Days: number;
+}
+
+export interface BillingPlanDto {
+  plan: SubscriptionPlan;
+  name: string;
+  description: string;
+  priceEtb: number;
+  monthlyCredits: number;
+  monthlyReplies: number;
+  voiceEnabled: boolean;
+  cameraEnabled: boolean;
+  analyticsEnabled: boolean;
+  productLimit: number | null;
+  customerLimit: number | null;
+  etbPerCredit: number | null;
+  active: boolean;
+}
+
+export interface TopUpPackageDto {
+  code: string;
+  name: string;
+  description: string;
+  priceEtb: number;
+  credits: number;
+  bonusCredits: number;
+  totalCredits: number;
+  validityDays: number;
+  etbPerCredit: number;
+}
+
+export interface CreditLedgerDto {
+  id: string;
+  type: CreditEntryType;
+  source: CreditSource;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  createdAt: string;
+}
+
+export interface BillingNoticeDto {
+  id: string;
+  kind: BillingNoticeKind;
+  amount: number | null;
+  createdAt: string;
+}
+
+export interface PaymentProviderDto {
+  code: BillingProviderCode;
+  name: string;
+  description: string;
+}
+
+export interface WalletDto {
+  total: number;
+  balances: CreditBalanceDto[];
+  expiringWithin7Days: number;
+  nextExpiryAt: string | null;
+  subscription: {
+    plan: SubscriptionPlan;
+    status: SubscriptionStatus;
+    paidUntil: string | null;
+    monthlyCredits: number;
+    priceEtb: number;
+    periodResetsOn: string;
+  };
+  plans: BillingPlanDto[];
+  packages: TopUpPackageDto[];
+  prices: { feature: AiCreditFeature; credits: number }[];
+  providers: PaymentProviderDto[];
+  ledger: CreditLedgerDto[];
+  notices: BillingNoticeDto[];
+  bestSubscriptionEtbPerCredit: number | null;
+  cheapestTopUpEtbPerCredit: number | null;
+  subscriptionSavingsPct: number | null;
+  topUpSpendThisMonthEtb: number;
+  suggestedPlan: SubscriptionPlan | null;
+}
+
+export interface CheckoutRequest {
+  purpose: BillingPaymentPurpose;
+  provider: BillingProviderCode;
+  plan?: SubscriptionPlan;
+  packageCode?: string;
+}
+
+export interface CheckoutResponse {
+  txRef: string;
+  checkoutUrl: string;
+  amountEtb: number;
+  credits: number;
+  provider: BillingProviderCode;
+  devSimulation: boolean;
+}
+
+export interface PaymentStatusDto {
+  txRef: string;
+  status: BillingPaymentStatus;
+  purpose: BillingPaymentPurpose;
+  amountEtb: number;
+  credits: number;
+  provider: BillingProviderCode;
+  title: string;
+  fulfilled: boolean;
+}
+
+export interface DevPaymentSimulationRequest {
+  txRef: string;
+  outcome: "success" | "failed" | "pending" | "cancelled";
+}

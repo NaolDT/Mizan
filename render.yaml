@@ -29,3 +29,11 @@ services:
         sync: false
       - key: ADDIS_API_KEY
         sync: false
+      - key: PUBLIC_API_URL
+        value: https://mizan-vwqy.onrender.com
+      - key: CHAPA_SECRET_KEY
+        sync: false
+      - key: CHAPA_WEBHOOK_SECRET
+        sync: false
+      - key: BILLING_ADMIN_KEY
+        sync: false

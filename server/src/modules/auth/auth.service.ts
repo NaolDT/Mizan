@@ -148,6 +148,11 @@ export async function registerMerchant(input: RegisterRequest): Promise<AuthResp
     return { user: createdUser, business: createdBusiness };
   });
 
+  const { grantWelcomePromotion } = await import("../billing/credit.service.js");
+  await grantWelcomePromotion(business.id, user.id).catch((err) => {
+    console.error("[Billing] welcome credits failed", err instanceof Error ? err.message : "unknown");
+  });
+
   const token = signAuthToken({ sub: user.id, role: user.role });
 
   return {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
+import { reserveAndRun } from "../billing/credit.service.js";
 import {
   cancelProposedAction,
   confirmProposedAction,
@@ -73,14 +74,21 @@ aiRouter.get("/conversations/latest", async (req, res, next) => {
 aiRouter.post("/chat", async (req, res, next) => {
   try {
     const body = chatBodySchema.parse(req.body);
-    const turn = await processAssistantTurn({
+    const turn = await reserveAndRun({
       businessId: req.tenant!.businessId,
       userId: req.tenant!.userId,
-      text: body.message,
-      language: body.language,
-      modality: body.modality,
-      conversationId: body.conversationId,
-      speakReply: body.speakReply,
+      feature: "TEXT_CHAT",
+      provider: "gemini",
+      run: () =>
+        processAssistantTurn({
+          businessId: req.tenant!.businessId,
+          userId: req.tenant!.userId,
+          text: body.message,
+          language: body.language,
+          modality: body.modality,
+          conversationId: body.conversationId,
+          speakReply: body.speakReply,
+        }),
     });
     sendSuccess(res, turn);
   } catch (err) {

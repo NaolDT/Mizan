@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownRight,
@@ -41,9 +42,11 @@ import { CustomersPanel } from "../components/CustomersPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
+import { WalletPanel } from "../components/WalletPanel";
 import { VisionCapture } from "../components/VisionCapture";
 import type { VisionWorkflow } from "@mizan/shared";
 import { useRefreshBilling } from "../hooks/useBilling";
+import { BILLING_TEXT } from "../i18n/billingText";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 import { apiRequest, downloadCsv } from "../lib/api";
@@ -57,11 +60,14 @@ export function DashboardPage() {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
 
+  const [searchParams] = useSearchParams();
+  const billingReturn = searchParams.get("billing");
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "ledger" | "inventory" | "customers" | "rewards"
-  >("dashboard");
+    "dashboard" | "ledger" | "inventory" | "customers" | "rewards" | "credits"
+  >(billingReturn === "return" || billingReturn === "dev" ? "credits" : "dashboard");
   const refreshBilling = useRefreshBilling();
   const rewardsText = REWARDS_TEXT[language];
+  const billingText = BILLING_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("ALL");
   const [ledgerSearch, setLedgerSearch] = useState("");
@@ -183,7 +189,7 @@ export function DashboardPage() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <button
                   type="button"
                   onClick={() => setActiveTab("dashboard")}
@@ -238,6 +244,17 @@ export function DashboardPage() {
                   }`}
                 >
                   {rewardsText.tab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("credits")}
+                  className={`font-semibold ${
+                    activeTab === "credits"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {billingText.tab}
                 </button>
               </div>
             </div>
@@ -543,6 +560,7 @@ export function DashboardPage() {
         )}
 
         {activeTab === "rewards" && <RewardsPanel />}
+        {activeTab === "credits" && <WalletPanel />}
         {activeTab === "inventory" && (
           <InventoryPanel
             onScanProduct={() => {
@@ -555,6 +573,7 @@ export function DashboardPage() {
 
         {/* Transactions Feed / Ledger */}
         {activeTab !== "rewards" &&
+          activeTab !== "credits" &&
           activeTab !== "inventory" &&
           activeTab !== "customers" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">

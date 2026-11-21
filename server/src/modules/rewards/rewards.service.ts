@@ -257,6 +257,15 @@ async function qualifyReferralIfReady(referredUserId: string, businessId: string
       data: { voiceBonusReplies: { increment: REWARD_RULES.welcomeReplies } },
     });
   });
+
+  const { grantReferralCredits } = await import("../billing/credit.service.js");
+  await grantReferralCredits({
+    referralId: referral.id,
+    referrerUserId: referral.referrerId,
+    referredUserId: referral.referredUserId,
+  }).catch((err) => {
+    console.error("[Billing] referral credits failed", err instanceof Error ? err.message : "unknown");
+  });
 }
 
 /** Runs every earning rule for a shop. Safe to call repeatedly. */

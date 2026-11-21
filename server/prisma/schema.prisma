@@ -167,11 +167,19 @@ model Business {
   priceHistory      ProductPriceHistory[]
   recognitionHints  ProductRecognitionHint[]
 
-  voiceRepliesUsed    Int       @default(0) @map("voice_replies_used")
-  voiceBonusReplies   Int       @default(0) @map("voice_bonus_replies")
-  usagePeriod         String    @default("") @map("usage_period") @db.VarChar(7)
-  trialEndsAt         DateTime? @map("trial_ends_at") @db.Timestamptz(6)
-  nextBillDiscountPct Int       @default(0) @map("next_bill_discount_pct")
+  voiceRepliesUsed      Int       @default(0) @map("voice_replies_used")
+  voiceBonusReplies     Int       @default(0) @map("voice_bonus_replies")
+  usagePeriod           String    @default("") @map("usage_period") @db.VarChar(7)
+  trialEndsAt           DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  nextBillDiscountPct   Int       @default(0) @map("next_bill_discount_pct")
+  planPaidUntil         DateTime? @map("plan_paid_until") @db.Timestamptz(6)
+  cancelPlanAtPeriodEnd Boolean   @default(false) @map("cancel_plan_at_period_end")
+
+  creditLots            CreditLot[]
+  creditLedger          CreditLedgerEntry[]
+  aiUsages              AiUsageRecord[]
+  billingPayments       BillingPayment[]
+  billingNotices        BillingNotice[]
 
   @@index([ownerId])
   @@map("businesses")
@@ -417,4 +425,248 @@ model StockMovement {
   @@index([productId, createdAt(sort: Desc)])
   @@index([businessId, createdAt(sort: Desc)])
   @@map("stock_movements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hybrid billing: plan catalog, AI credit wallet, top-ups, payments
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CreditSource {
+  SUBSCRIPTION
+  PURCHASED
+  REFERRAL
+  PROMO
+  ADMIN
+}
+
+enum CreditEntryType {
+  ALLOCATION
+  USAGE
+  TOPUP
+  REFERRAL_REWARD
+  PROMO_REWARD
+  ADMIN_GRANT
+  ADMIN_DEBIT
+  EXPIRATION
+  REFUND
+}
+
+enum BillingPaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum BillingPaymentPurpose {
+  SUBSCRIPTION
+  TOPUP
+}
+
+enum BillingProvider {
+  CHAPA
+  DEV
+}
+
+enum AiCreditFeature {
+  TEXT_CHAT
+  VOICE_TURN
+  TTS
+  VISION
+  RECEIPT
+}
+
+enum PromotionKind {
+  WELCOME
+}
+
+/// Prices, monthly credits and feature flags for the existing four plans.
+/// Rows are seeded from the current catalog and then edited without a deploy.
+model BillingPlanConfig {
+  plan              SubscriptionPlan @id
+  name              String           @db.VarChar(60)
+  description       String           @db.VarChar(280)
+  priceEtb          Decimal          @map("price_etb") @db.Decimal(12, 2)
+  monthlyCredits    Int              @map("monthly_credits")
+  monthlyReplies    Int              @map("monthly_replies")
+  voiceEnabled      Boolean          @default(true) @map("voice_enabled")
+  cameraEnabled     Boolean          @default(true) @map("camera_enabled")
+  analyticsEnabled  Boolean          @default(true) @map("analytics_enabled")
+  productLimit      Int?             @map("product_limit")
+  customerLimit     Int?             @map("customer_limit")
+  active            Boolean          @default(true)
+  displayOrder      Int              @default(0) @map("display_order")
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("billing_plan_configs")
+}
+
+model TopUpPackage {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique @db.VarChar(40)
+  name          String   @db.VarChar(60)
+  description   String   @db.VarChar(280)
+  priceEtb      Decimal  @map("price_etb") @db.Decimal(12, 2)
+  credits       Int
+  bonusCredits  Int      @default(0) @map("bonus_credits")
+  validityDays  Int      @map("validity_days")
+  active        Boolean  @default(true)
+  displayOrder  Int      @default(0) @map("display_order")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("top_up_packages")
+}
+
+model AiCreditPrice {
+  feature   AiCreditFeature @id
+  credits   Int
+  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("ai_credit_prices")
+}
+
+model BillingSetting {
+  id                        String   @id @default("default") @db.VarChar(16)
+  referralReferrerCredits   Int      @default(30) @map("referral_referrer_credits")
+  referralWelcomeCredits    Int      @default(15) @map("referral_welcome_credits")
+  referralCreditDays        Int      @default(60) @map("referral_credit_days")
+  lowBalanceThreshold       Int      @default(10) @map("low_balance_threshold")
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("billing_settings")
+}
+
+model BillingPromotion {
+  id           String        @id @default(uuid()) @db.Uuid
+  code         String        @unique @db.VarChar(40)
+  kind         PromotionKind
+  name         String        @db.VarChar(80)
+  credits      Int
+  validityDays Int           @map("validity_days")
+  active       Boolean       @default(false)
+  startsAt     DateTime?     @map("starts_at") @db.Timestamptz(6)
+  endsAt       DateTime?     @map("ends_at") @db.Timestamptz(6)
+  maxGrants    Int?          @map("max_grants")
+  grantCount   Int           @default(0) @map("grant_count")
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("billing_promotions")
+}
+
+/// One grant of credits. Remaining falls as credits are spent. periodKey makes
+/// the same monthly grant, payment or referral reward impossible to apply twice.
+model CreditLot {
+  id          String       @id @default(uuid()) @db.Uuid
+  businessId  String       @map("business_id") @db.Uuid
+  source      CreditSource
+  original    Int
+  remaining   Int
+  expiresAt   DateTime?    @map("expires_at") @db.Timestamptz(6)
+  periodKey   String       @map("period_key") @db.VarChar(120)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  draws       CreditDraw[]
+
+  @@unique([businessId, source, periodKey])
+  @@index([businessId, expiresAt])
+  @@map("credit_lots")
+}
+
+model CreditLedgerEntry {
+  id             String          @id @default(uuid()) @db.Uuid
+  businessId     String          @map("business_id") @db.Uuid
+  userId         String?         @map("user_id") @db.Uuid
+  type           CreditEntryType
+  source         CreditSource
+  amount         Int
+  balanceAfter   Int             @map("balance_after")
+  idempotencyKey String          @unique @map("idempotency_key") @db.VarChar(200)
+  paymentId      String?         @map("payment_id") @db.Uuid
+  usageId        String?         @map("usage_id") @db.Uuid
+  description    String          @db.VarChar(240)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payment        BillingPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("credit_ledger_entries")
+}
+
+model CreditDraw {
+  id        String    @id @default(uuid()) @db.Uuid
+  usageId   String    @map("usage_id") @db.Uuid
+  lotId     String    @map("lot_id") @db.Uuid
+  amount    Int
+  refunded  Boolean   @default(false)
+
+  usage     AiUsageRecord @relation(fields: [usageId], references: [id], onDelete: Cascade)
+  lot       CreditLot     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@index([usageId])
+  @@map("credit_draws")
+}
+
+model AiUsageRecord {
+  id             String          @id @default(uuid()) @db.Uuid
+  businessId     String          @map("business_id") @db.Uuid
+  userId         String          @map("user_id") @db.Uuid
+  feature        AiCreditFeature
+  provider       String?         @db.VarChar(40)
+  creditsCharged Int             @map("credits_charged")
+  status         String          @db.VarChar(16)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  draws          CreditDraw[]
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("ai_usage_records")
+}
+
+model BillingPayment {
+  id              String                 @id @default(uuid()) @db.Uuid
+  businessId      String                 @map("business_id") @db.Uuid
+  userId          String                 @map("user_id") @db.Uuid
+  purpose         BillingPaymentPurpose
+  provider        BillingProvider
+  status          BillingPaymentStatus   @default(PENDING)
+  plan            SubscriptionPlan?
+  packageCode     String?                @map("package_code") @db.VarChar(40)
+  title           String                 @db.VarChar(120)
+  amount          Decimal                @db.Decimal(12, 2)
+  currency        String                 @default("ETB") @db.VarChar(3)
+  creditsToGrant  Int                    @map("credits_to_grant")
+  validityDays    Int                    @default(30) @map("validity_days")
+  txRef           String                 @unique @map("tx_ref") @db.VarChar(64)
+  providerRef     String?                @map("provider_ref") @db.VarChar(120)
+  checkoutUrl     String?                @map("checkout_url") @db.VarChar(500)
+  devOutcome      String?                @map("dev_outcome") @db.VarChar(16)
+  failureReason   String?                @map("failure_reason") @db.VarChar(80)
+  fulfilledAt     DateTime?              @map("fulfilled_at") @db.Timestamptz(6)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business        Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  ledger          CreditLedgerEntry[]
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("billing_payments")
+}
+
+model BillingNotice {
+  id         String    @id @default(uuid()) @db.Uuid
+  businessId String    @map("business_id") @db.Uuid
+  kind       String    @db.VarChar(40)
+  amount     Int?
+  readAt     DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("billing_notices")
 }
