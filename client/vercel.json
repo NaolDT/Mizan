@@ -1,4 +1,7 @@
 {
+  "installCommand": "cd .. && npm ci --include=dev",
+  "buildCommand": "cd .. && npm run build --workspace=shared && npm run build --workspace=client",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/:path*",

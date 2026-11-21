@@ -64,6 +64,12 @@ npm run dev
 
 ---
 
+## Deployment
+
+The API deploys to Render from `render.yaml`, the web app to Vercel from `client/vercel.json`, and the database stays on Neon. Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) step by step.
+
+---
+
 ## Safety & Financial Integrity Guarantees
 1. **Zero LLM Math**: All KPIs, balances, category breakdowns, and period comparisons are computed in PostgreSQL / TypeScript using exact `Decimal(12,2)` arithmetic.
 2. **Two-Step Confirmation Gate**: AI and Voice interactions never mutate `transactions` directly—they produce validated `PENDING_CONFIRMATION` drafts requiring explicit user confirmation with an `idempotency_key`.

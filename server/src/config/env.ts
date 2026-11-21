@@ -3,6 +3,13 @@ import { z } from "zod";
 
 dotenv.config();
 
+// Both of these are published in the repository, so neither may sign production tokens.
+const DEV_JWT_SECRET = "mizan-dev-jwt-secret-change-in-production-2026";
+const PUBLIC_JWT_SECRETS = new Set([
+  DEV_JWT_SECRET,
+  "replace-with-at-least-32-random-characters-for-mizan-jwt",
+]);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -13,7 +20,7 @@ const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(16, "JWT_SECRET must be at least 16 characters")
-    .default("mizan-dev-jwt-secret-change-in-production-2026"),
+    .default(DEV_JWT_SECRET),
   JWT_EXPIRES_IN: z.string().default("7d"),
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().default("gemini-3.5-flash"),
@@ -33,6 +40,13 @@ const parsed = envSchema.safeParse({
 
 if (!parsed.success) {
   console.error("Invalid server environment configuration:", parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === "production" && PUBLIC_JWT_SECRETS.has(parsed.data.JWT_SECRET)) {
+  console.error(
+    "JWT_SECRET is missing or still set to a published example value. Set a private random value before starting in production."
+  );
   process.exit(1);
 }
 
