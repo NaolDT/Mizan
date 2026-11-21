@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   CreateCustomerRequest,
   CustomerDetailDto,
   CustomerDto,
   RecordCustomerPaymentRequest,
+  UpdateCustomerRequest,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
 import { SHOP_TEXT } from "../i18n/shopText";
@@ -17,8 +18,11 @@ export function CustomersPanel() {
   const text = SHOP_TEXT[language];
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<CustomerDto | null>(null);
+  const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
 
@@ -33,6 +37,22 @@ export function CustomersPanel() {
     enabled: Boolean(selectedId),
   });
 
+  const resetForm = () => {
+    setShowForm(false);
+    setEditing(null);
+    setName("");
+    setPhone("");
+    setNotes("");
+  };
+
+  const startEdit = (customer: CustomerDto) => {
+    setEditing(customer);
+    setShowForm(true);
+    setName(customer.name);
+    setPhone(customer.phone ?? "");
+    setNotes(customer.notes ?? "");
+  };
+
   const createMutation = useMutation({
     mutationFn: (payload: CreateCustomerRequest) =>
       apiRequest<CustomerDto>("/customers", {
@@ -41,9 +61,30 @@ export function CustomersPanel() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
-      setShowForm(false);
-      setName("");
-      setPhone("");
+      resetForm();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateCustomerRequest }) =>
+      apiRequest<CustomerDto>(`/customers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
+      resetForm();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{ deleted: boolean }>(`/customers/${id}`, { method: "DELETE" }),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
+      if (selectedId === id) setSelectedId(null);
     },
   });
 
@@ -62,7 +103,14 @@ export function CustomersPanel() {
     },
   });
 
-  const customers = listQuery.data ?? [];
+  const customers = (listQuery.data ?? []).filter((customer) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      customer.name.toLowerCase().includes(q) ||
+      (customer.phone ?? "").toLowerCase().includes(q)
+    );
+  });
   const detail = detailQuery.data;
 
   return (
@@ -72,7 +120,10 @@ export function CustomersPanel() {
           <h2 className="text-sm font-bold text-slate-800">{text.addCustomer}</h2>
           <button
             type="button"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              if (showForm) resetForm();
+              else setShowForm(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white"
           >
             <Plus className="h-4 w-4" />
@@ -80,12 +131,24 @@ export function CustomersPanel() {
           </button>
         </div>
 
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={text.search}
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        />
+
         {showForm && (
           <form
             className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4"
             onSubmit={(e) => {
               e.preventDefault();
-              createMutation.mutate({ name, phone: phone || undefined });
+              const payload = { name, phone: phone || undefined, notes: notes || undefined };
+              if (editing) {
+                updateMutation.mutate({ id: editing.id, body: payload });
+              } else {
+                createMutation.mutate(payload);
+              }
             }}
           >
             <input
@@ -101,12 +164,20 @@ export function CustomersPanel() {
               placeholder={text.phone}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
             />
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={text.notes}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            />
             <button
               type="submit"
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || updateMutation.isPending}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-sm font-bold text-white"
             >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {(createMutation.isPending || updateMutation.isPending) && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
               {text.save}
             </button>
           </form>
@@ -119,19 +190,19 @@ export function CustomersPanel() {
         ) : (
           <ul className="space-y-2">
             {customers.map((customer) => (
-              <li key={customer.id}>
+              <li key={customer.id} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setSelectedId(customer.id)}
-                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left ${
+                  className={`flex min-w-0 flex-1 items-center justify-between rounded-xl border px-3 py-3 text-left ${
                     selectedId === customer.id
                       ? "border-emerald-500 bg-emerald-50"
                       : "border-slate-200 bg-white"
                   }`}
                 >
-                  <span className="font-semibold text-slate-900">{customer.name}</span>
+                  <span className="truncate font-semibold text-slate-900">{customer.name}</span>
                   <span
-                    className={`text-xs font-bold ${
+                    className={`ml-2 shrink-0 text-xs font-bold ${
                       customer.outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"
                     }`}
                   >
@@ -140,9 +211,32 @@ export function CustomersPanel() {
                       : text.settled}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => startEdit(customer)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
+                  title={text.edit}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(text.deleteItem)) deleteMutation.mutate(customer.id);
+                  }}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                  title={text.deleteItem}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </li>
             ))}
           </ul>
+        )}
+        {deleteMutation.error && (
+          <p className="text-xs text-rose-600">
+            {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Error"}
+          </p>
         )}
       </div>
 
@@ -153,6 +247,7 @@ export function CustomersPanel() {
           <>
             <h3 className="text-lg font-bold text-slate-900">{detail.name}</h3>
             {detail.phone && <p className="text-xs text-slate-500">{detail.phone}</p>}
+            {detail.notes && <p className="mt-1 text-xs text-slate-500">{detail.notes}</p>}
             <p className="mt-3 text-2xl font-bold text-amber-800">
               {formatEtb(detail.outstandingBalance)}
             </p>

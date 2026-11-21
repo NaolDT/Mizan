@@ -33,6 +33,14 @@ export interface ShopText {
   productLabel: string;
   qtySoldLabel: string;
   noProduct: string;
+  search: string;
+  edit: string;
+  deleteItem: string;
+  profitTitle: string;
+  sold: string;
+  grossProfit: string;
+  stockValue: string;
+  noCostYet: string;
 }
 
 const en: ShopText = {
@@ -68,6 +76,14 @@ const en: ShopText = {
   productLabel: "Product (optional)",
   qtySoldLabel: "Quantity",
   noProduct: "No product",
+  search: "Search",
+  edit: "Edit",
+  deleteItem: "Delete",
+  profitTitle: "Product profitability",
+  sold: "Sold",
+  grossProfit: "Gross profit",
+  stockValue: "Stock at cost",
+  noCostYet: "Add a cost price to see profit.",
 };
 
 const am: ShopText = {
@@ -103,6 +119,14 @@ const am: ShopText = {
   productLabel: "እቃ (አማራጭ)",
   qtySoldLabel: "ብዛት",
   noProduct: "እቃ የለም",
+  search: "ፈልግ",
+  edit: "አርትዕ",
+  deleteItem: "ሰርዝ",
+  profitTitle: "የእቃ ትርፍ",
+  sold: "ተሽጧል",
+  grossProfit: "ጠቅላላ ትርፍ",
+  stockValue: "ክምችት በወጪ",
+  noCostYet: "ትርፍ ለማየት የግዢ ዋጋ ያስገቡ።",
 };
 
 const om: ShopText = {
@@ -138,6 +162,14 @@ const om: ShopText = {
   productLabel: "Meeshaa (filannoo)",
   qtySoldLabel: "Baay'ina",
   noProduct: "Meeshaan hin jiru",
+  search: "Barbaadi",
+  edit: "Gulaali",
+  deleteItem: "Haqi",
+  profitTitle: "Bu'aa meeshaa",
+  sold: "Gurgurame",
+  grossProfit: "Bu'aa waliigalaa",
+  stockValue: "Kuufama gatii bittaa",
+  noCostYet: "Bu'aa ilaaluuf gatii bittaa galchi.",
 };
 
 export const SHOP_TEXT: Record<LanguageCode, ShopText> = { am, om, en };

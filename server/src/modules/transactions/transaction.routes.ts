@@ -5,6 +5,7 @@ import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import {
   createTransaction,
+  exportTransactionsCsv,
   listTransactions,
   updateTransaction,
   voidTransaction,
@@ -39,7 +40,8 @@ const listQuerySchema = z.object({
     .string()
     .optional()
     .transform((val) => val === "true"),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(2000).optional(),
+  q: z.string().max(80).optional(),
 });
 
 const createTxSchema = z.object({
@@ -64,6 +66,18 @@ const updateTxSchema = z.object({
   paymentMethod: paymentMethodEnum.optional(),
   counterpartyName: z.string().max(120).nullable().optional(),
   transactionDate: z.string().optional(),
+});
+
+transactionRouter.get("/export", async (req, res, next) => {
+  try {
+    const query = listQuerySchema.parse(req.query);
+    const csv = await exportTransactionsCsv(req.tenant!.businessId, query);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="mizan-transactions.csv"');
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
 });
 
 transactionRouter.get("/", async (req, res, next) => {

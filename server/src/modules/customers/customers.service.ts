@@ -275,3 +275,21 @@ export async function outstandingTotals(businessId: string) {
   );
   return { customersOwingCount: owing.length, outstandingTotal: total };
 }
+
+export async function deleteCustomer(businessId: string, customerId: string): Promise<void> {
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, businessId },
+  });
+  if (!customer) throw new AppError(404, "CUSTOMER_NOT_FOUND", "Customer not found");
+
+  const balance = await getCustomerBalance(customer.id);
+  if (balance.gt(0)) {
+    throw new AppError(
+      409,
+      "CUSTOMER_HAS_BALANCE",
+      "Settle the outstanding balance before deleting this customer"
+    );
+  }
+
+  await prisma.customer.delete({ where: { id: customer.id } });
+}

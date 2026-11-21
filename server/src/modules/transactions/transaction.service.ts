@@ -78,13 +78,14 @@ export interface ListTransactionsFilter {
   paymentMethod?: PaymentMethod;
   includeVoided?: boolean;
   limit?: number;
+  q?: string;
 }
 
 export async function listTransactions(
   businessId: string,
   filters: ListTransactionsFilter = {}
 ): Promise<{ items: TransactionDto[]; totalCount: number }> {
-  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
+  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 2000);
 
   let dateFilter: Prisma.DateTimeFilter | undefined;
   if (filters.range && filters.range !== "all") {
@@ -95,6 +96,7 @@ export async function listTransactions(
     };
   }
 
+  const query = filters.q?.trim();
   const where: Prisma.TransactionWhereInput = {
     businessId,
     ...(filters.includeVoided ? {} : { status: "COMPLETED" }),
@@ -102,6 +104,14 @@ export async function listTransactions(
     ...(filters.category ? { category: filters.category } : {}),
     ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
     ...(dateFilter ? { transactionDate: dateFilter } : {}),
+    ...(query
+      ? {
+          OR: [
+            { description: { contains: query, mode: "insensitive" } },
+            { counterpartyName: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
   const [rows, totalCount] = await Promise.all([
@@ -117,6 +127,45 @@ export async function listTransactions(
     items: rows.map(mapTransactionDto),
     totalCount,
   };
+}
+
+function csvEscape(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+export async function exportTransactionsCsv(
+  businessId: string,
+  filters: ListTransactionsFilter = {}
+): Promise<string> {
+  const { items } = await listTransactions(businessId, { ...filters, limit: 2000 });
+  const header = [
+    "date",
+    "type",
+    "category",
+    "amount",
+    "currency",
+    "paymentMethod",
+    "counterparty",
+    "description",
+    "status",
+  ];
+  const rows = items.map((tx) =>
+    [
+      tx.transactionDate.slice(0, 10),
+      tx.type,
+      tx.category,
+      tx.amount.toFixed(2),
+      tx.currency,
+      tx.paymentMethod,
+      tx.counterpartyName ?? "",
+      tx.description,
+      tx.status,
+    ]
+      .map((cell) => csvEscape(String(cell)))
+      .join(",")
+  );
+  return `\uFEFF${[header.join(","), ...rows].join("\n")}`;
 }
 
 export async function createTransaction(

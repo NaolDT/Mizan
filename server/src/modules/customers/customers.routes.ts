@@ -5,6 +5,7 @@ import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import {
   createCustomer,
+  deleteCustomer,
   getCustomer,
   listCustomers,
   recordCustomerPayment,
@@ -59,6 +60,15 @@ customersRouter.patch("/:id", async (req, res, next) => {
   try {
     const body = updateSchema.parse(req.body);
     sendSuccess(res, await updateCustomer(req.tenant!.businessId, req.params.id, body));
+  } catch (err) {
+    next(err);
+  }
+});
+
+customersRouter.delete("/:id", async (req, res, next) => {
+  try {
+    await deleteCustomer(req.tenant!.businessId, req.params.id);
+    sendSuccess(res, { deleted: true });
   } catch (err) {
     next(err);
   }

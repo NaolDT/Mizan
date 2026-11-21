@@ -63,6 +63,8 @@ export interface UiDictionary {
   dateLabel: string;
   saveChanges: string;
   voidEntry: string;
+  exportCsv: string;
+  searchPlaceholder: string;
   assistantTitle: string;
   assistantSubtitle: string;
   chatPlaceholder: string;
@@ -143,6 +145,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     dateLabel: "ቀን",
     saveChanges: "መዝግብ",
     voidEntry: "ሰርዝ (Void)",
+    exportCsv: "CSV አውርድ",
+    searchPlaceholder: "ግብይት ፈልግ...",
     assistantTitle: "Mizan የንግድ ረዳት",
     assistantSubtitle: "በድምፅ ወይም በጽሑፍ ገቢ/ወጪ ይመዝግቡ፣ ትርፍዎን ይጠይቁ",
     chatPlaceholder: "ለምሳሌ፦ ዛሬ 2,500 ብር ሸጫለሁ...",
@@ -252,6 +256,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     dateLabel: "Guyyaa",
     saveChanges: "Olkaa'i",
     voidEntry: "Haqi (Void)",
+    exportCsv: "CSV buusi",
+    searchPlaceholder: "Daldala barbaadi...",
     assistantTitle: "Gargaaraa Daldalaa Mizan",
     assistantSubtitle: "Sagalee ykn barreeffamaan galii/baasii galmeessaa, bu'aa gaafadhaa",
     chatPlaceholder: "Fkn: Har'a gurgurtaarraa qarshii 2,500 argadheera...",
@@ -361,6 +367,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     dateLabel: "Date",
     saveChanges: "Save Entry",
     voidEntry: "Void",
+    exportCsv: "Export CSV",
+    searchPlaceholder: "Search transactions...",
     assistantTitle: "Mizan Business Assistant",
     assistantSubtitle: "Speak or type to record sales/expenses and ask about your shop",
     chatPlaceholder: "e.g., I sold 2,500 birr of goods today...",

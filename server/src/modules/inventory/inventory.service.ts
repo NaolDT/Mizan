@@ -2,13 +2,17 @@ import { Prisma, type Product } from "@prisma/client";
 import type {
   AdjustStockRequest,
   CreateProductRequest,
+  DateRangePreset,
+  InventoryValuationDto,
   ProductDto,
+  ProductProfitabilityDto,
   StockMovementDto,
   StockMovementReason,
   UpdateProductRequest,
 } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
+import { getEatDateWindow } from "../../utils/eatDate.js";
 import { toNameKey } from "../customers/customers.service.js";
 
 function toNumber2(dec: Prisma.Decimal): number {
@@ -280,4 +284,97 @@ export async function reverseStockForTransaction(
     },
     transactionId
   );
+}
+
+export async function deleteProduct(businessId: string, productId: string): Promise<void> {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, businessId },
+  });
+  if (!existing) throw new AppError(404, "PRODUCT_NOT_FOUND", "Product not found");
+  await prisma.product.delete({ where: { id: existing.id } });
+}
+
+export async function getProductProfitability(
+  businessId: string,
+  range: DateRangePreset = "month"
+): Promise<ProductProfitabilityDto[]> {
+  let dateFilter: Prisma.DateTimeFilter | undefined;
+  if (range === "today" || range === "week" || range === "month") {
+    const window = getEatDateWindow(range);
+    dateFilter = { gte: window.startUtc, lte: window.endUtc };
+  }
+
+  const [products, sales] = await Promise.all([
+    prisma.product.findMany({ where: { businessId }, orderBy: { name: "asc" } }),
+    prisma.transaction.findMany({
+      where: {
+        businessId,
+        status: "COMPLETED",
+        type: "INCOME",
+        productId: { not: null },
+        ...(dateFilter ? { transactionDate: dateFilter } : {}),
+      },
+      select: { productId: true, amount: true, quantity: true },
+    }),
+  ]);
+
+  const totals = new Map<string, { revenue: Prisma.Decimal; qty: Prisma.Decimal; count: number }>();
+  for (const row of sales) {
+    if (!row.productId) continue;
+    const current = totals.get(row.productId) ?? {
+      revenue: new Prisma.Decimal(0),
+      qty: new Prisma.Decimal(0),
+      count: 0,
+    };
+    current.revenue = current.revenue.plus(row.amount);
+    if (row.quantity) current.qty = current.qty.plus(row.quantity);
+    current.count += 1;
+    totals.set(row.productId, current);
+  }
+
+  return products
+    .map((product) => {
+      const agg = totals.get(product.id);
+      const revenue = agg?.revenue ?? new Prisma.Decimal(0);
+      const quantitySold = agg?.qty ?? new Prisma.Decimal(0);
+      const cogs =
+        product.costPrice != null && quantitySold.gt(0)
+          ? product.costPrice.mul(quantitySold)
+          : null;
+      const grossProfit = cogs != null ? revenue.minus(cogs) : null;
+      const stockCostValue =
+        product.costPrice != null ? product.costPrice.mul(product.quantityOnHand) : null;
+      return {
+        productId: product.id,
+        name: product.name,
+        unit: product.unit,
+        quantityOnHand: toNumber2(product.quantityOnHand),
+        salesCount: agg?.count ?? 0,
+        quantitySold: toNumber2(quantitySold),
+        revenue: toNumber2(revenue),
+        cogs: cogs != null ? toNumber2(cogs) : null,
+        grossProfit: grossProfit != null ? toNumber2(grossProfit) : null,
+        stockCostValue: stockCostValue != null ? toNumber2(stockCostValue) : null,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+export async function getInventoryValuation(businessId: string): Promise<InventoryValuationDto> {
+  const products = await prisma.product.findMany({ where: { businessId } });
+  let costValue = new Prisma.Decimal(0);
+  let retailValue = new Prisma.Decimal(0);
+  for (const product of products) {
+    if (product.costPrice != null) {
+      costValue = costValue.plus(product.costPrice.mul(product.quantityOnHand));
+    }
+    if (product.sellingPrice != null) {
+      retailValue = retailValue.plus(product.sellingPrice.mul(product.quantityOnHand));
+    }
+  }
+  return {
+    productCount: products.length,
+    costValue: toNumber2(costValue),
+    retailValue: toNumber2(retailValue),
+  };
 }

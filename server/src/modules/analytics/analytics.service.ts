@@ -16,7 +16,11 @@ import {
   formatEatIsoTimestamp,
   getEatDateWindow,
 } from "../../utils/eatDate.js";
-import { listLowStock } from "../inventory/inventory.service.js";
+import {
+  getInventoryValuation,
+  getProductProfitability,
+  listLowStock,
+} from "../inventory/inventory.service.js";
 import { outstandingTotals } from "../customers/customers.service.js";
 import { mapTransactionDto } from "../transactions/transaction.service.js";
 
@@ -259,13 +263,16 @@ export interface AiBusinessContextSnapshot {
   monthSummary: FinancialSummaryDto;
   recentTransactions: TransactionDto[];
   products: Array<{ name: string; quantityOnHand: number; unit: string; isLowStock: boolean }>;
+  topSelling: Array<{ name: string; revenue: number; quantitySold: number }>;
+  inventoryValuation: { costValue: number; retailValue: number };
   customersOwing: Array<{ name: string; outstandingBalance: number }>;
 }
 
 export async function buildAiContextSnapshot(
   businessId: string
 ): Promise<AiBusinessContextSnapshot> {
-  const [business, weekSummary, monthSummary, recentRows, products, customers] = await Promise.all([
+  const [business, weekSummary, monthSummary, recentRows, products, customers, profits, valuation] =
+    await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: { name: true, category: true, location: true },
@@ -289,6 +296,8 @@ export async function buildAiContextSnapshot(
       take: 20,
       select: { id: true, name: true },
     }),
+    getProductProfitability(businessId, "month"),
+    getInventoryValuation(businessId),
   ]);
 
   const customerBalances = await Promise.all(
@@ -322,6 +331,11 @@ export async function buildAiContextSnapshot(
       unit: p.unit,
       isLowStock: p.lowStockThreshold.gt(0) && p.quantityOnHand.lte(p.lowStockThreshold),
     })),
+    topSelling: profits
+      .filter((p) => p.quantitySold > 0)
+      .slice(0, 5)
+      .map((p) => ({ name: p.name, revenue: p.revenue, quantitySold: p.quantitySold })),
+    inventoryValuation: { costValue: valuation.costValue, retailValue: valuation.retailValue },
     customersOwing: customerBalances.filter((c) => c.outstandingBalance > 0),
   };
 }
@@ -450,6 +464,48 @@ function insightCopy(
         body: "Galii, baasii fi kuufamni yeroo darban wajjin wal bira qabamee tasgabbaya.",
       },
     },
+    "best-seller": {
+      en: {
+        title: "Best-selling product",
+        body: "{name} brought in {amount} ETB this period ({qty} sold).",
+      },
+      am: {
+        title: "በብዛት የተሸጠ እቃ",
+        body: "{name} በዚህ ጊዜ {amount} ETB አስገብቷል ({qty} ተሽጧል)።",
+      },
+      om: {
+        title: "Meeshaa gurgurtaa ol aanaa",
+        body: "{name} yeroo kana {amount} ETB fideera ({qty} gurgurameera).",
+      },
+    },
+    "slow-moving": {
+      en: {
+        title: "Slow-moving stock",
+        body: "{count} products had no linked sales this period: {names}.",
+      },
+      am: {
+        title: "በዝግታ የሚሸጥ እቃ",
+        body: "{count} እቃ በዚህ ጊዜ የተገናኘ ሽያጭ የለውም፦ {names}።",
+      },
+      om: {
+        title: "Meeshaa suuta gurguramu",
+        body: "Meeshaaleen {count} yeroo kana gurgurtaa hidhataa hin qaban: {names}.",
+      },
+    },
+    "stock-value": {
+      en: {
+        title: "Inventory value",
+        body: "Stock on hand is worth about {amount} ETB at recorded cost.",
+      },
+      am: {
+        title: "የክምችት ዋጋ",
+        body: "በተመዘገበ ወጪ ዋጋ፣ ክምችቱ ወደ {amount} ETB ይገመታል።",
+      },
+      om: {
+        title: "Gatii kuufamaa",
+        body: "Kuufamni jiru gatii bittaa irratti {amount} ETB ta'a.",
+      },
+    },
   };
 
   const entry = copies[id]?.[language] ?? copies[id]?.en;
@@ -463,10 +519,12 @@ export async function getBusinessInsights(
   range: "today" | "week" | "month" = "month",
   language: LanguageCode = "en"
 ): Promise<BusinessInsightsDto> {
-  const [summary, lowStock, outstanding] = await Promise.all([
+  const [summary, lowStock, outstanding, profits, valuation] = await Promise.all([
     getFinancialSummary(businessId, range),
     listLowStock(businessId),
     outstandingTotals(businessId),
+    getProductProfitability(businessId, range),
+    getInventoryValuation(businessId),
   ]);
 
   const items: InsightItemDto[] = [];
@@ -515,6 +573,32 @@ export async function getBusinessInsights(
         .slice(0, 3)
         .map((p) => p.name)
         .join(", "),
+    });
+  }
+
+  const sold = profits.filter((p) => p.quantitySold > 0 || p.revenue > 0);
+  if (sold[0]) {
+    push("best-seller", "info", {
+      name: sold[0].name,
+      amount: sold[0].revenue.toLocaleString("en-US"),
+      qty: String(sold[0].quantitySold),
+    });
+  }
+
+  const slow = profits.filter((p) => p.quantityOnHand > 0 && p.quantitySold === 0 && p.revenue === 0);
+  if (slow.length > 0 && sold.length > 0) {
+    push("slow-moving", "info", {
+      count: String(slow.length),
+      names: slow
+        .slice(0, 3)
+        .map((p) => p.name)
+        .join(", "),
+    });
+  }
+
+  if (valuation.costValue > 0) {
+    push("stock-value", "info", {
+      amount: valuation.costValue.toLocaleString("en-US"),
     });
   }
 

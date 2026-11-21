@@ -6,6 +6,7 @@ import {
   LogOut,
   MessageSquare,
   Mic,
+  Download,
   Pencil,
   Plus,
   Settings,
@@ -42,7 +43,7 @@ import { RewardsPanel } from "../components/RewardsPanel";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
-import { apiRequest } from "../lib/api";
+import { apiRequest, downloadCsv } from "../lib/api";
 import { formatEtb, formatShortDate } from "../lib/format";
 
 type SummaryRange = "today" | "week" | "month";
@@ -60,6 +61,7 @@ export function DashboardPage() {
   const rewardsText = REWARDS_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("ALL");
+  const [ledgerSearch, setLedgerSearch] = useState("");
 
   const [txModalState, setTxModalState] = useState<{
     open: boolean;
@@ -78,7 +80,12 @@ export function DashboardPage() {
   });
 
   const transactionsQuery = useQuery({
-    queryKey: ["transactions", activeTab === "dashboard" ? range : "all", ledgerFilter],
+    queryKey: [
+      "transactions",
+      activeTab === "dashboard" ? range : "all",
+      ledgerFilter,
+      ledgerSearch,
+    ],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set("range", activeTab === "dashboard" ? range : "all");
@@ -89,6 +96,7 @@ export function DashboardPage() {
       if (ledgerFilter === "CREDIT") {
         params.set("paymentMethod", "CREDIT");
       }
+      if (ledgerSearch.trim()) params.set("q", ledgerSearch.trim());
       return apiRequest<{ items: TransactionDto[]; totalCount: number }>(
         `/transactions?${params.toString()}`
       );
@@ -530,6 +538,37 @@ export function DashboardPage() {
             <h3 className="text-sm font-bold text-slate-900">
               {t.recentTransactionsTitle}
             </h3>
+
+            {activeTab === "ledger" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={ledgerSearch}
+                  onChange={(e) => setLedgerSearch(e.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="w-44 rounded-xl border border-slate-200 px-3 py-1.5 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams();
+                    params.set("range", "all");
+                    if (ledgerFilter === "INCOME" || ledgerFilter === "EXPENSE") {
+                      params.set("type", ledgerFilter);
+                    }
+                    if (ledgerFilter === "CREDIT") params.set("paymentMethod", "CREDIT");
+                    if (ledgerSearch.trim()) params.set("q", ledgerSearch.trim());
+                    void downloadCsv(
+                      `/transactions/export?${params.toString()}`,
+                      "mizan-transactions.csv"
+                    );
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {t.exportCsv}
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
               {(

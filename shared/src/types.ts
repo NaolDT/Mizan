@@ -565,6 +565,25 @@ export interface AdjustStockRequest {
   note?: string;
 }
 
+export interface ProductProfitabilityDto {
+  productId: string;
+  name: string;
+  unit: string;
+  quantityOnHand: number;
+  salesCount: number;
+  quantitySold: number;
+  revenue: number;
+  cogs: number | null;
+  grossProfit: number | null;
+  stockCostValue: number | null;
+}
+
+export interface InventoryValuationDto {
+  productCount: number;
+  costValue: number;
+  retailValue: number;
+}
+
 export interface InsightItemDto {
   id: string;
   severity: InsightSeverity;

@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   AdjustStockRequest,
   CreateProductRequest,
+  InventoryValuationDto,
   ProductDto,
+  ProductProfitabilityDto,
   StockMovementDto,
+  UpdateProductRequest,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
 import { SHOP_TEXT } from "../i18n/shopText";
@@ -17,10 +20,14 @@ export function InventoryPanel() {
   const text = SHOP_TEXT[language];
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<ProductDto | null>(null);
+  const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("pcs");
   const [qty, setQty] = useState("0");
   const [threshold, setThreshold] = useState("5");
+  const [sellingPrice, setSellingPrice] = useState("");
+  const [costPrice, setCostPrice] = useState("");
   const [adjusting, setAdjusting] = useState<{ id: string; sign: 1 | -1 } | null>(null);
   const [adjustQty, setAdjustQty] = useState("1");
 
@@ -32,6 +39,36 @@ export function InventoryPanel() {
     queryKey: ["stock-movements"],
     queryFn: () => apiRequest<StockMovementDto[]>("/inventory/movements"),
   });
+  const profitQuery = useQuery({
+    queryKey: ["product-profit", "month"],
+    queryFn: () => apiRequest<ProductProfitabilityDto[]>("/inventory/profitability?range=month"),
+  });
+  const valuationQuery = useQuery({
+    queryKey: ["inventory-valuation"],
+    queryFn: () => apiRequest<InventoryValuationDto>("/inventory/valuation"),
+  });
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditing(null);
+    setName("");
+    setUnit("pcs");
+    setQty("0");
+    setThreshold("5");
+    setSellingPrice("");
+    setCostPrice("");
+  };
+
+  const startEdit = (product: ProductDto) => {
+    setEditing(product);
+    setShowForm(true);
+    setName(product.name);
+    setUnit(product.unit);
+    setQty(String(product.quantityOnHand));
+    setThreshold(String(product.lowStockThreshold));
+    setSellingPrice(product.sellingPrice != null ? String(product.sellingPrice) : "");
+    setCostPrice(product.costPrice != null ? String(product.costPrice) : "");
+  };
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateProductRequest) =>
@@ -42,9 +79,34 @@ export function InventoryPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
-      setShowForm(false);
-      setName("");
-      setQty("0");
+      queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
+      resetForm();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateProductRequest }) =>
+      apiRequest<ProductDto>(`/inventory/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["product-profit"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
+      resetForm();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest<{ deleted: boolean }>(`/inventory/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["product-profit"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
     },
   });
 
@@ -58,20 +120,28 @@ export function InventoryPanel() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       setAdjusting(null);
     },
   });
 
-  const products = productsQuery.data ?? [];
+  const products = (productsQuery.data ?? []).filter((product) =>
+    product.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
   const movements = movementsQuery.data ?? [];
+  const profits = profitQuery.data ?? [];
+  const valuation = valuationQuery.data;
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-slate-800">{text.addProduct}</h2>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (showForm) resetForm();
+            else setShowForm(true);
+          }}
           className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" />
@@ -79,17 +149,40 @@ export function InventoryPanel() {
         </button>
       </div>
 
+      {valuation && valuation.productCount > 0 && (
+        <p className="text-xs text-slate-500">
+          {text.stockValue}: {formatEtb(valuation.costValue)}
+          {valuation.retailValue > 0 ? ` · ${formatEtb(valuation.retailValue)}` : ""}
+        </p>
+      )}
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={text.search}
+        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+      />
+
       {showForm && (
         <form
           className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
-            createMutation.mutate({
+            const payload = {
               name,
               unit,
-              quantityOnHand: Number(qty) || 0,
               lowStockThreshold: Number(threshold) || 0,
-            });
+              sellingPrice: sellingPrice ? Number(sellingPrice) : null,
+              costPrice: costPrice ? Number(costPrice) : null,
+            };
+            if (editing) {
+              updateMutation.mutate({ id: editing.id, body: payload });
+            } else {
+              createMutation.mutate({
+                ...payload,
+                quantityOnHand: Number(qty) || 0,
+              });
+            }
           }}
         >
           <input
@@ -105,15 +198,17 @@ export function InventoryPanel() {
             placeholder={text.unit}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            placeholder={text.quantity}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          />
+          {!editing && (
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              placeholder={text.quantity}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            />
+          )}
           <input
             type="number"
             min="0"
@@ -123,19 +218,34 @@ export function InventoryPanel() {
             placeholder={text.threshold}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={sellingPrice}
+            onChange={(e) => setSellingPrice(e.target.value)}
+            placeholder={text.sellingPrice}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={costPrice}
+            onChange={(e) => setCostPrice(e.target.value)}
+            placeholder={text.costPrice}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
           <button
             type="submit"
-            disabled={createMutation.isPending}
+            disabled={createMutation.isPending || updateMutation.isPending}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-sm font-bold text-white sm:col-span-2"
           >
-            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {(createMutation.isPending || updateMutation.isPending) && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
             {text.save}
           </button>
-          {createMutation.error && (
-            <p className="text-xs text-rose-600 sm:col-span-2">
-              {createMutation.error instanceof Error ? createMutation.error.message : "Error"}
-            </p>
-          )}
         </form>
       )}
 
@@ -154,11 +264,31 @@ export function InventoryPanel() {
                   <p className="font-bold text-slate-900">{product.name}</p>
                   <p className="text-xs text-slate-500">{product.unit}</p>
                 </div>
-                {product.isLowStock && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                    {text.lowStock}
-                  </span>
-                )}
+                <div className="flex items-center gap-1">
+                  {product.isLowStock && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      {text.lowStock}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => startEdit(product)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    title={text.edit}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(text.deleteItem)) deleteMutation.mutate(product.id);
+                    }}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    title={text.deleteItem}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <p className="mt-2 text-2xl font-bold text-slate-900">
                 {product.quantityOnHand}
@@ -227,6 +357,29 @@ export function InventoryPanel() {
             </li>
           ))}
         </ul>
+      )}
+
+      {profits.some((row) => row.salesCount > 0) && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-bold text-slate-800">{text.profitTitle}</h3>
+          <ul className="mt-2 divide-y divide-slate-100">
+            {profits
+              .filter((row) => row.salesCount > 0)
+              .slice(0, 8)
+              .map((row) => (
+                <li key={row.productId} className="flex items-center justify-between py-2 text-xs">
+                  <span className="text-slate-700">
+                    {row.name} · {text.sold} {row.quantitySold} {row.unit}
+                  </span>
+                  <span className="font-bold text-slate-900">
+                    {row.grossProfit != null
+                      ? formatEtb(row.grossProfit)
+                      : `${formatEtb(row.revenue)} · ${text.noCostYet}`}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </div>
       )}
 
       {movements.length > 0 && (

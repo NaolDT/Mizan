@@ -1,4 +1,5 @@
 import { GoogleGenAI, ThinkingLevel, Type, type Schema } from "@google/genai";
+import { z } from "zod";
 import { Prisma, type AiMessage } from "@prisma/client";
 import type {
   AiMessageDto,
@@ -179,6 +180,121 @@ const AI_RESPONSE_SCHEMA: Schema = {
   },
   required: ["intent", "confidence", "displayMessage", "spokenMessage"],
 };
+
+const categoryZod = z.enum([
+  "SALES",
+  "SERVICE_INCOME",
+  "OTHER_INCOME",
+  "INVENTORY_PURCHASE",
+  "TRANSPORT",
+  "RENT",
+  "UTILITIES",
+  "SALARY",
+  "FOOD",
+  "MARKETING",
+  "OTHER_EXPENSE",
+]);
+
+const paymentZod = z.enum(["CASH", "TELEBIRR", "BANK", "CREDIT"]);
+
+const structuredLlmSchema = z.object({
+  intent: z.enum([
+    "record_income",
+    "record_expense",
+    "confirm_pending_action",
+    "cancel_pending_action",
+    "query_financial_summary",
+    "analyze_expenses",
+    "list_recent_transactions",
+    "business_advice",
+    "general_greeting",
+    "clarification_needed",
+    "query_inventory",
+    "adjust_stock",
+    "query_customer_balance",
+    "record_customer_payment",
+  ]),
+  confidence: z.coerce.number(),
+  displayMessage: z.string().min(1),
+  spokenMessage: z.string().optional().default(""),
+  proposedTransaction: z
+    .object({
+      type: z.enum(["INCOME", "EXPENSE"]),
+      category: categoryZod,
+      amount: z.coerce.number(),
+      description: z.string(),
+      paymentMethod: paymentZod.nullish(),
+      counterpartyName: z.string().nullish(),
+      productName: z.string().nullish(),
+      quantity: z.coerce.number().nullish(),
+      transactionDate: z.string().nullish(),
+    })
+    .nullish(),
+  proposedStock: z
+    .object({
+      productName: z.string(),
+      quantityDelta: z.coerce.number(),
+      reason: z.enum(["RESTOCK", "SALE", "ADJUSTMENT"]),
+      note: z.string().nullish(),
+    })
+    .nullish(),
+  proposedPayment: z
+    .object({
+      customerName: z.string(),
+      amount: z.coerce.number(),
+      paymentMethod: paymentZod.nullish(),
+      note: z.string().nullish(),
+    })
+    .nullish(),
+});
+
+function parseStructuredLlmResult(rawJson: string): StructuredLlmResult | null {
+  try {
+    const parsed = structuredLlmSchema.safeParse(JSON.parse(rawJson));
+    if (!parsed.success) {
+      console.warn("[Gemini] JSON failed zod validation:", parsed.error.flatten());
+      return null;
+    }
+    const data = parsed.data;
+    return {
+      intent: data.intent,
+      confidence: data.confidence,
+      displayMessage: data.displayMessage,
+      spokenMessage: data.spokenMessage,
+      proposedTransaction: data.proposedTransaction
+        ? {
+            type: data.proposedTransaction.type,
+            category: data.proposedTransaction.category,
+            amount: data.proposedTransaction.amount,
+            description: data.proposedTransaction.description,
+            paymentMethod: data.proposedTransaction.paymentMethod ?? undefined,
+            counterpartyName: data.proposedTransaction.counterpartyName ?? null,
+            productName: data.proposedTransaction.productName ?? null,
+            quantity: data.proposedTransaction.quantity ?? null,
+            transactionDate: data.proposedTransaction.transactionDate ?? undefined,
+          }
+        : null,
+      proposedStock: data.proposedStock
+        ? {
+            productName: data.proposedStock.productName,
+            quantityDelta: data.proposedStock.quantityDelta,
+            reason: data.proposedStock.reason,
+            note: data.proposedStock.note ?? undefined,
+          }
+        : null,
+      proposedPayment: data.proposedPayment
+        ? {
+            customerName: data.proposedPayment.customerName,
+            amount: data.proposedPayment.amount,
+            paymentMethod: data.proposedPayment.paymentMethod ?? undefined,
+            note: data.proposedPayment.note ?? undefined,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function mapAiMessageDto(msg: AiMessage): AiMessageDto {
   return {
@@ -442,6 +558,23 @@ function buildDeterministicFallbackResult(
     };
   }
 
+  if (/(best.?sell|most.?sold|slow.?mov|የተሸጠ|gurgurtaa)/i.test(userText) && ctx.topSelling.length > 0) {
+    const top = ctx.topSelling[0];
+    const displayMessage =
+      language === "am"
+        ? `በዚህ ወር በብዛት የተሸጠው ${top.name} ነው (${top.quantitySold}፣ ${top.revenue.toLocaleString("en-US")} ETB)።`
+        : language === "om"
+          ? `Ji'a kana kan caalaa gurgurame ${top.name} dha (${top.quantitySold}, ETB ${top.revenue.toLocaleString("en-US")}).`
+          : `Your best-selling product this month is ${top.name} (${top.quantitySold} sold, ${top.revenue.toLocaleString("en-US")} ETB).`;
+    return {
+      intent: "query_inventory",
+      confidence: 0.9,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
   // Otherwise answer financial summary using real SQL metrics!
   const tIncome = ctx.monthSummary.today.income.toLocaleString("en-US");
   const tExpense = ctx.monthSummary.today.expense.toLocaleString("en-US");
@@ -518,6 +651,8 @@ ${JSON.stringify({
     description: tx.description,
   })),
   products: ctx.products,
+  topSelling: ctx.topSelling,
+  inventoryValuation: ctx.inventoryValuation,
   customersOwing: ctx.customersOwing,
 })}`;
 
@@ -575,7 +710,10 @@ ${JSON.stringify({
 
       const rawJson = response.text?.trim();
       if (rawJson) {
-        const parsed = JSON.parse(rawJson) as StructuredLlmResult;
+        const parsed = parseStructuredLlmResult(rawJson);
+        if (!parsed) {
+          throw new Error("LLM JSON failed validation");
+        }
         return {
           ...parsed,
           spokenMessage: normalizeSpokenText(
