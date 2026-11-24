@@ -21,6 +21,7 @@ import {
   formatEatIsoTimestamp,
   getEatDateWindow,
 } from "../../utils/eatDate.js";
+import { suggestReorder } from "../inventory/intelligence.math.js";
 import { composeAdvisorReport } from "./advisor.compose.js";
 import { accumulateCashFlow, serializeCashTotals } from "./cashflow.math.js";
 import {
@@ -402,6 +403,8 @@ export interface AiBusinessContextSnapshot {
     dailySalesRate: number | null;
     daysOfCover: number | null;
     coverConfidence: "estimated" | "uncertain" | "none";
+    shouldReorder: boolean;
+    suggestedReorderQty: number | null;
   }>;
   topSelling: Array<{ name: string; revenue: number; quantitySold: number }>;
   inventoryValuation: { costValue: number; retailValue: number };
@@ -430,7 +433,13 @@ export async function buildAiContextSnapshot(
       where: { businessId },
       orderBy: { name: "asc" },
       take: 20,
-      select: { name: true, quantityOnHand: true, unit: true, lowStockThreshold: true },
+      select: {
+        name: true,
+        quantityOnHand: true,
+        unit: true,
+        lowStockThreshold: true,
+        maxStockLevel: true,
+      },
     }),
     prisma.customer.findMany({
       where: { businessId },
@@ -473,9 +482,19 @@ export async function buildAiContextSnapshot(
     products: products.map((p) => {
       const monthRow = profits.find((row) => row.name === p.name);
       const weekRow = weekProfits.find((row) => row.name === p.name);
+      const onHand = Number(p.quantityOnHand.toFixed(2));
+      const lowStockThreshold = Number(p.lowStockThreshold.toFixed(2));
+      const reorder = suggestReorder({
+        quantityOnHand: onHand,
+        lowStockThreshold,
+        maxStockLevel: Number(p.maxStockLevel.toFixed(2)),
+        dailySalesRate: monthRow?.dailySalesRate ?? null,
+        daysOfCover: monthRow?.daysOfCover ?? null,
+        coverConfidence: monthRow?.coverConfidence ?? "none",
+      });
       return {
         name: p.name,
-        quantityOnHand: Number(p.quantityOnHand.toFixed(2)),
+        quantityOnHand: onHand,
         unit: p.unit,
         isLowStock: p.lowStockThreshold.gt(0) && p.quantityOnHand.lte(p.lowStockThreshold),
         quantitySoldWeek: weekRow?.quantitySold ?? 0,
@@ -483,6 +502,8 @@ export async function buildAiContextSnapshot(
         dailySalesRate: monthRow?.dailySalesRate ?? null,
         daysOfCover: monthRow?.daysOfCover ?? null,
         coverConfidence: monthRow?.coverConfidence ?? "none",
+        shouldReorder: reorder.shouldReorder,
+        suggestedReorderQty: reorder.suggestedQty,
       };
     }),
     topSelling: profits

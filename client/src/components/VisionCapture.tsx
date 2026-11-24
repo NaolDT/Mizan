@@ -223,6 +223,8 @@ export function VisionCapture({
     queryClient.invalidateQueries({ queryKey: ["insights"] });
     queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
     queryClient.invalidateQueries({ queryKey: ["advisor"] });
+    queryClient.invalidateQueries({ queryKey: ["notices"] });
+    queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
   };
 
   const saleMutation = useMutation({

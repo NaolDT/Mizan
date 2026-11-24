@@ -49,6 +49,14 @@ export interface ShopText {
   addPhoto: string;
   daysLeft: string;
   coverUncertain: string;
+  maxStock: string;
+  intelligenceTitle: string;
+  reorderSoon: string;
+  fastMoving: string;
+  slowMoving: string;
+  deadStock: string;
+  demandUp: string;
+  suggestedReorder: string;
 }
 
 const en: ShopText = {
@@ -100,6 +108,14 @@ const en: ShopText = {
   addPhoto: "Product photo",
   daysLeft: "days of stock",
   coverUncertain: "estimate — more sales needed",
+  maxStock: "Max stock",
+  intelligenceTitle: "Stock forecast",
+  reorderSoon: "Review a reorder",
+  fastMoving: "Fast-moving",
+  slowMoving: "Slow-moving",
+  deadStock: "Not selling",
+  demandUp: "Selling faster",
+  suggestedReorder: "Suggested qty",
 };
 
 const am: ShopText = {
@@ -151,6 +167,14 @@ const am: ShopText = {
   addPhoto: "የእቃ ፎቶ",
   daysLeft: "የቀሩ ቀናት ክምችት",
   coverUncertain: "ግምት — ተጨማሪ ሽያጭ ያስፈልጋል",
+  maxStock: "ከፍተኛ ክምችት",
+  intelligenceTitle: "የክምችት ትንበያ",
+  reorderSoon: "እንደገና መግዛት ይመልከቱ",
+  fastMoving: "በፍጥነት የሚሸጥ",
+  slowMoving: "በዝግታ የሚሸጥ",
+  deadStock: "ያልተሸጠ",
+  demandUp: "ሽያጭ ጨምሯል",
+  suggestedReorder: "የሚመከር ብዛት",
 };
 
 const om: ShopText = {
@@ -202,6 +226,14 @@ const om: ShopText = {
   addPhoto: "Suuraa meeshaa",
   daysLeft: "guyyaa kuufamaa",
   coverUncertain: "tilmaama — gurgurtaa dabalataa barbaachisa",
+  maxStock: "Kuufama ol aanaa",
+  intelligenceTitle: "Tilmaama kuufamaa",
+  reorderSoon: "Bittaa haarawa ilaali",
+  fastMoving: "Saffisaan gurguramu",
+  slowMoving: "Suuta gurguramu",
+  deadStock: "Hin gurguramne",
+  demandUp: "Gurgurtaa dabaleera",
+  suggestedReorder: "Baay'ina gorfamaa",
 };
 
 export const SHOP_TEXT: Record<LanguageCode, ShopText> = { am, om, en };

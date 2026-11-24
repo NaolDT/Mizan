@@ -9,6 +9,7 @@ import {
   getCashFlow,
   getFinancialSummary,
 } from "./analytics.service.js";
+import { dismissBusinessNotice, listBusinessNotices } from "./notices.service.js";
 
 export const analyticsRouter = Router();
 
@@ -54,6 +55,25 @@ analyticsRouter.get("/advisor", async (req, res, next) => {
   try {
     const { range, language } = insightsQuerySchema.parse(req.query);
     sendSuccess(res, await getAdvisorReport(req.tenant!.businessId, range, language ?? "en"));
+  } catch (err) {
+    next(err);
+  }
+});
+
+analyticsRouter.get("/notices", async (req, res, next) => {
+  try {
+    const { range, language } = insightsQuerySchema.parse(req.query);
+    sendSuccess(res, await listBusinessNotices(req.tenant!.businessId, language ?? "en", range));
+  } catch (err) {
+    next(err);
+  }
+});
+
+analyticsRouter.post("/notices/:id/dismiss", async (req, res, next) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? "";
+    await dismissBusinessNotice(req.tenant!.businessId, id);
+    sendSuccess(res, { dismissed: true });
   } catch (err) {
     next(err);
   }

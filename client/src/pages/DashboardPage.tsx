@@ -42,6 +42,7 @@ import { CustomersPanel } from "../components/CustomersPanel";
 import { AdvisorPanel } from "../components/AdvisorPanel";
 import { CashPositionPanel } from "../components/CashPositionPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
+import { NoticesPanel } from "../components/NoticesPanel";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { WalletPanel } from "../components/WalletPanel";
@@ -132,6 +133,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
       window.setTimeout(refreshBilling, 1500);
     },
   });
@@ -156,6 +159,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
     },
   });
 
@@ -172,6 +177,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
     },
   });
 
@@ -433,6 +440,7 @@ export function DashboardPage() {
             </div>
 
             <InsightsStrip range={range} />
+            <NoticesPanel range={range} />
             <AdvisorPanel range={range} />
 
             {/* 4 Deterministic KPI Cards */}

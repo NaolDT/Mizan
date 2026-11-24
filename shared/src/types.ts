@@ -536,6 +536,7 @@ export interface ProductDto {
   unit: string;
   quantityOnHand: number;
   lowStockThreshold: number;
+  maxStockLevel: number;
   sellingPrice: number | null;
   costPrice: number | null;
   hasImage: boolean;
@@ -564,6 +565,7 @@ export interface CreateProductRequest {
   unit?: string;
   quantityOnHand?: number;
   lowStockThreshold?: number;
+  maxStockLevel?: number;
   sellingPrice?: number | null;
   costPrice?: number | null;
 }
@@ -577,6 +579,7 @@ export interface UpdateProductRequest {
   aliases?: string | null;
   unit?: string;
   lowStockThreshold?: number;
+  maxStockLevel?: number;
   sellingPrice?: number | null;
   costPrice?: number | null;
 }
@@ -603,6 +606,56 @@ export interface ProductProfitabilityDto {
   dailySalesRate: number | null;
   daysOfCover: number | null;
   coverConfidence: StockCoverConfidence;
+}
+
+export type InventoryMovementClass = "fast" | "slow" | "dead" | "ok";
+
+export type InventoryDemandTrend = "up" | "down" | "steady" | "unknown";
+
+export type ReorderReason = "cover" | "threshold";
+
+export interface InventoryIntelligenceItemDto extends ProductProfitabilityDto {
+  maxStockLevel: number;
+  lowStockThreshold: number;
+  classification: InventoryMovementClass;
+  demandTrend: InventoryDemandTrend;
+  shouldReorder: boolean;
+  suggestedReorderQty: number | null;
+  reorderReason: ReorderReason | null;
+  daysSinceLastSale: number | null;
+}
+
+export interface InventoryIntelligenceDto {
+  range: Exclude<DateRangePreset, "all">;
+  generatedAtEat: string;
+  items: InventoryIntelligenceItemDto[];
+  reorderSoon: InventoryIntelligenceItemDto[];
+  fastMoving: InventoryIntelligenceItemDto[];
+  slowMoving: InventoryIntelligenceItemDto[];
+  deadStock: InventoryIntelligenceItemDto[];
+  demandUp: InventoryIntelligenceItemDto[];
+}
+
+export type BusinessNoticeKind =
+  | "STOCK_COVER"
+  | "LOW_STOCK"
+  | "DEAD_STOCK"
+  | "SLOW_MOVING"
+  | "INCOME_DOWN"
+  | "EXPENSES_UP"
+  | "OUTSTANDING"
+  | "NEED_RECORDS"
+  | "DEMAND_UP";
+
+export interface BusinessNoticeDto {
+  id: string;
+  kind: BusinessNoticeKind;
+  severity: InsightSeverity;
+  entityType: "PRODUCT" | "CUSTOMER" | "NONE";
+  entityId: string | null;
+  title: string;
+  body: string;
+  createdAt: string;
 }
 
 export interface CashFlowDailyPoint {

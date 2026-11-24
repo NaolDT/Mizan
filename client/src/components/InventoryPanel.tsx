@@ -4,6 +4,8 @@ import { Camera, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   AdjustStockRequest,
   CreateProductRequest,
+  InventoryIntelligenceDto,
+  InventoryIntelligenceItemDto,
   InventoryValuationDto,
   ProductDto,
   ProductPriceHistoryDto,
@@ -49,6 +51,33 @@ function ProductThumb({
   return <img src={url} alt={alt} className="h-14 w-14 rounded-xl object-cover" />;
 }
 
+function ForecastGroup({
+  title,
+  rows,
+  extra,
+}: {
+  title: string;
+  rows: InventoryIntelligenceItemDto[];
+  extra?: (row: InventoryIntelligenceItemDto) => string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{title}</h4>
+      <ul className="mt-1 divide-y divide-slate-100">
+        {rows.slice(0, 5).map((row) => (
+          <li key={row.productId} className="flex items-center justify-between py-1.5 text-xs">
+            <span className="text-slate-700">{row.name}</span>
+            <span className="font-semibold text-slate-900">
+              {extra ? extra(row) : `${row.quantityOnHand} ${row.unit}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }) {
   const { language } = useLanguage();
   const text = SHOP_TEXT[language];
@@ -60,6 +89,7 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
   const [unit, setUnit] = useState("pcs");
   const [qty, setQty] = useState("0");
   const [threshold, setThreshold] = useState("5");
+  const [maxStock, setMaxStock] = useState("0");
   const [sellingPrice, setSellingPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [brand, setBrand] = useState("");
@@ -89,6 +119,10 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
     queryKey: ["inventory-valuation"],
     queryFn: () => apiRequest<InventoryValuationDto>("/inventory/valuation"),
   });
+  const intelligenceQuery = useQuery({
+    queryKey: ["inventory-intelligence", "month"],
+    queryFn: () => apiRequest<InventoryIntelligenceDto>("/inventory/intelligence?range=month"),
+  });
 
   const resetForm = () => {
     setShowForm(false);
@@ -97,6 +131,7 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
     setUnit("pcs");
     setQty("0");
     setThreshold("5");
+    setMaxStock("0");
     setSellingPrice("");
     setCostPrice("");
     setBrand("");
@@ -111,6 +146,7 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
     setUnit(product.unit);
     setQty(String(product.quantityOnHand));
     setThreshold(String(product.lowStockThreshold));
+    setMaxStock(String(product.maxStockLevel ?? 0));
     setSellingPrice(product.sellingPrice != null ? String(product.sellingPrice) : "");
     setCostPrice(product.costPrice != null ? String(product.costPrice) : "");
     setBrand(product.brand ?? "");
@@ -129,6 +165,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       resetForm();
     },
@@ -145,6 +183,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
       queryClient.invalidateQueries({ queryKey: ["product-profit"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       queryClient.invalidateQueries({ queryKey: ["price-history"] });
@@ -172,6 +212,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
       queryClient.invalidateQueries({ queryKey: ["product-profit"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
     },
@@ -189,6 +231,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
+      queryClient.invalidateQueries({ queryKey: ["notices"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-intelligence"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       setAdjusting(null);
     },
@@ -204,6 +248,7 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
   const movements = movementsQuery.data ?? [];
   const profits = profitQuery.data ?? [];
   const valuation = valuationQuery.data;
+  const intelligence = intelligenceQuery.data;
 
   return (
     <div className="space-y-5">
@@ -260,6 +305,7 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
               barcode: barcode.trim() || null,
               sizeLabel: sizeLabel.trim() || null,
               lowStockThreshold: Number(threshold) || 0,
+              maxStockLevel: Number(maxStock) || 0,
               sellingPrice: sellingPrice ? Number(sellingPrice) : null,
               costPrice: costPrice ? Number(costPrice) : null,
             };
@@ -322,6 +368,15 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
             placeholder={text.threshold}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={maxStock}
+            onChange={(e) => setMaxStock(e.target.value)}
+            placeholder={text.maxStock}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
           <input
@@ -497,6 +552,32 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
             </li>
           ))}
         </ul>
+      )}
+
+      {intelligence &&
+        (intelligence.reorderSoon.length > 0 ||
+          intelligence.fastMoving.length > 0 ||
+          intelligence.slowMoving.length > 0 ||
+          intelligence.deadStock.length > 0 ||
+          intelligence.demandUp.length > 0) && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-bold text-slate-800">{text.intelligenceTitle}</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <ForecastGroup
+              title={text.reorderSoon}
+              rows={intelligence.reorderSoon}
+              extra={(row) =>
+                `${text.suggestedReorder} ${row.suggestedReorderQty ?? 0} ${row.unit}${
+                  row.daysOfCover != null ? ` · ${row.daysOfCover} ${text.daysLeft}` : ""
+                }`
+              }
+            />
+            <ForecastGroup title={text.fastMoving} rows={intelligence.fastMoving} extra={(row) => `${text.sold} ${row.quantitySold} ${row.unit}`} />
+            <ForecastGroup title={text.demandUp} rows={intelligence.demandUp} extra={(row) => `${text.sold} ${row.quantitySold} ${row.unit}`} />
+            <ForecastGroup title={text.slowMoving} rows={intelligence.slowMoving} />
+            <ForecastGroup title={text.deadStock} rows={intelligence.deadStock} />
+          </div>
+        </div>
       )}
 
       {profits.some((row) => row.salesCount > 0) && (

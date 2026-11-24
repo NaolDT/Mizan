@@ -658,10 +658,10 @@ function buildDeterministicFallbackResult(
             ? `${named.name} amma ${named.quantityOnHand} ${named.unit} qaba. Gurgurtaa hidhataa dhiyoo waan hin jirreef yeroo dhumuu tilmaamuun hin danda'amu.`
             : `${named.name} currently has ${named.quantityOnHand} ${named.unit}. There are not enough linked sales to estimate when it may run out.`
         : language === "am"
-          ? `${named.name} አሁን ${named.quantityOnHand} ${named.unit} አለው። በቅርብ ሽያጭ ወደ ${named.daysOfCover} ቀን ሊቆይ ይችላል${named.coverConfidence === "uncertain" ? "፤ ግምቱ እርግጠኛ አይደለም" : ""}።`
+          ? `${named.name} አሁን ${named.quantityOnHand} ${named.unit} አለው። በቅርብ ሽያጭ ወደ ${named.daysOfCover} ቀን ሊቆይ ይችላል${named.coverConfidence === "uncertain" ? "፤ ግምቱ እርግጠኛ አይደለም" : ""}።${named.shouldReorder && named.suggestedReorderQty ? ` ወደ ${named.suggestedReorderQty} ${named.unit} እንደገና መግዛት ያስቡ። ግዢ አልተፈጸመም።` : ""}`
           : language === "om"
-            ? `${named.name} amma ${named.quantityOnHand} ${named.unit} qaba. Gurgurtaa dhiyoo irratti guyyaa ${named.daysOfCover} turuu danda'a${named.coverConfidence === "uncertain" ? "; tilmaamni hin mirkanaa'u" : ""}.`
-            : `${named.name} currently has ${named.quantityOnHand} ${named.unit}. Based on recent sales it may last about ${named.daysOfCover} days${named.coverConfidence === "uncertain" ? "; this estimate is uncertain" : ""}.`;
+            ? `${named.name} amma ${named.quantityOnHand} ${named.unit} qaba. Gurgurtaa dhiyoo irratti guyyaa ${named.daysOfCover} turuu danda'a${named.coverConfidence === "uncertain" ? "; tilmaamni hin mirkanaa'u" : ""}.${named.shouldReorder && named.suggestedReorderQty ? ` ${named.suggestedReorderQty} ${named.unit} bittaa haarawa ilaali. Bittaan hin raawwatamne.` : ""}`
+            : `${named.name} currently has ${named.quantityOnHand} ${named.unit}. Based on recent sales it may last about ${named.daysOfCover} days${named.coverConfidence === "uncertain" ? "; this estimate is uncertain" : ""}.${named.shouldReorder && named.suggestedReorderQty ? ` Consider planning a reorder of about ${named.suggestedReorderQty} ${named.unit}. No purchase has been placed.` : ""}`;
     return {
       intent: "query_inventory",
       confidence: 0.9,
@@ -764,7 +764,7 @@ CRITICAL SAFETY & DETERMINISTIC RULES:
 4. Inventory: for stock questions use PRODUCTS_JSON only. For adding/removing stock, set intent = "adjust_stock" and fill proposedStock (quantityDelta positive for restock, negative for sale/use). If the product name is unclear, ask which product.
 5. Customers: for "how much does X owe" use CUSTOMERS_OWING_JSON only. For "X paid me N birr", set intent = "record_customer_payment" and fill proposedPayment. Never invent a balance.
 6. Cash vs credit: CASH_FLOW_JSON is authoritative. Credit sales are NOT cash collected. Collections are customer debt payments (cash in, not new revenue).
-7. Days of stock: PRODUCT_COVER_JSON. If coverConfidence is "none" or daysOfCover is null, say more linked sales are needed. If "uncertain", say the estimate is uncertain. NEVER invent a day count.
+7. Days of stock: PRODUCT_COVER_JSON. If coverConfidence is "none" or daysOfCover is null, say more linked sales are needed. If "uncertain", say the estimate is uncertain. NEVER invent a day count. If shouldReorder is true, suggest reviewing a reorder of suggestedReorderQty. Never place a purchase.
 8. Follow-ups: CONVERSATION_FOCUS_JSON is the product or customer just discussed. If the merchant says "that", "it", or "this week" without naming one, use that focus.
 9. Keep responses concise (2-4 short sentences) so voice playback stays short.
 
@@ -794,6 +794,8 @@ ${JSON.stringify({
     dailySalesRate: p.dailySalesRate,
     daysOfCover: p.daysOfCover,
     coverConfidence: p.coverConfidence,
+    shouldReorder: p.shouldReorder,
+    suggestedReorderQty: p.suggestedReorderQty,
   })),
   cashFlow: {
     week: {

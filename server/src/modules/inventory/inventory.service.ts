@@ -35,6 +35,7 @@ function mapProductDto(product: Product): ProductDto {
     unit: product.unit,
     quantityOnHand: qty,
     lowStockThreshold: threshold,
+    maxStockLevel: toNumber2(product.maxStockLevel),
     sellingPrice: product.sellingPrice != null ? toNumber2(product.sellingPrice) : null,
     costPrice: product.costPrice != null ? toNumber2(product.costPrice) : null,
     hasImage: Boolean(product.imageBytes && product.imageBytes.length > 0),
@@ -124,6 +125,7 @@ export async function createProduct(
         unit: input.unit?.trim() || "pcs",
         quantityOnHand: qty,
         lowStockThreshold: new Prisma.Decimal((input.lowStockThreshold ?? 0).toFixed(2)),
+        maxStockLevel: new Prisma.Decimal((input.maxStockLevel ?? 0).toFixed(2)),
         sellingPrice,
         costPrice,
       },
@@ -185,6 +187,9 @@ export async function updateProduct(
       ...(input.unit !== undefined ? { unit: input.unit.trim() || "pcs" } : {}),
       ...(input.lowStockThreshold !== undefined
         ? { lowStockThreshold: new Prisma.Decimal(input.lowStockThreshold.toFixed(2)) }
+        : {}),
+      ...(input.maxStockLevel !== undefined
+        ? { maxStockLevel: new Prisma.Decimal(input.maxStockLevel.toFixed(2)) }
         : {}),
       ...(input.sellingPrice !== undefined ? { sellingPrice: nextSelling } : {}),
       ...(input.costPrice !== undefined ? { costPrice: nextCost } : {}),

@@ -18,6 +18,7 @@ import {
   saveProductImage,
   updateProduct,
 } from "./inventory.service.js";
+import { getInventoryIntelligence } from "./intelligence.service.js";
 
 export const inventoryRouter = Router();
 
@@ -35,6 +36,7 @@ const createSchema = z.object({
   unit: z.string().max(24).optional(),
   quantityOnHand: z.number().min(0).optional(),
   lowStockThreshold: z.number().min(0).optional(),
+  maxStockLevel: z.number().min(0).optional(),
   sellingPrice: optionalMoney,
   costPrice: optionalMoney,
 });
@@ -74,6 +76,18 @@ inventoryRouter.get("/profitability", async (req, res, next) => {
         ? req.query.range
         : "month";
     sendSuccess(res, await getProductProfitability(req.tenant!.businessId, range));
+  } catch (err) {
+    next(err);
+  }
+});
+
+inventoryRouter.get("/intelligence", async (req, res, next) => {
+  try {
+    const range =
+      req.query.range === "today" || req.query.range === "week" || req.query.range === "month"
+        ? req.query.range
+        : "month";
+    sendSuccess(res, await getInventoryIntelligence(req.tenant!.businessId, range));
   } catch (err) {
     next(err);
   }

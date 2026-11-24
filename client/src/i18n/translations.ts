@@ -49,6 +49,8 @@ export interface UiDictionary {
   advisorPositives: string;
   advisorProblems: string;
   advisorActions: string;
+  noticesTitle: string;
+  dismissNotice: string;
   creditsRemaining: string;
   rangeToday: string;
   rangeWeek: string;
@@ -148,6 +150,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     advisorPositives: "ጥሩ እድገት",
     advisorProblems: "ሊጠበቁ የሚገቡ",
     advisorActions: "የሚመከሩ እርምጃዎች",
+    noticesTitle: "የሱቅ ማስጠንቀቂያዎች",
+    dismissNotice: "ደብቅ",
     creditsRemaining: "AI ክሬዲት",
     rangeToday: "ዛሬ",
     rangeWeek: "ባለፉት 7 ቀናት",
@@ -276,6 +280,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     advisorPositives: "Guddina gaarii",
     advisorProblems: "Kan eegamuu qabu",
     advisorActions: "Tarkaanfii gorfamaa",
+    noticesTitle: "Akeekkachiisa suuqii",
+    dismissNotice: "Dhoksi",
     creditsRemaining: "AI kirediitii",
     rangeToday: "Har'a",
     rangeWeek: "Guyyoota 7 Darban",
@@ -404,6 +410,8 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     advisorPositives: "Going well",
     advisorProblems: "Watch these",
     advisorActions: "Recommended actions",
+    noticesTitle: "Shop alerts",
+    dismissNotice: "Dismiss",
     creditsRemaining: "AI credits",
     rangeToday: "Today",
     rangeWeek: "Last 7 Days",

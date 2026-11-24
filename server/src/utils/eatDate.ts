@@ -78,3 +78,9 @@ export function countEatPeriodDays(
   const eatNow = new Date(now.getTime() + EAT_OFFSET_MS);
   return eatNow.getUTCDate();
 }
+
+export function countEatDaysBetween(from: Date, to: Date = new Date()): number {
+  const start = Date.parse(`${formatEatDateKey(from)}T00:00:00+03:00`);
+  const end = Date.parse(`${formatEatDateKey(to)}T00:00:00+03:00`);
+  return Math.max(0, Math.floor((end - start) / (24 * 60 * 60 * 1000)));
+}
