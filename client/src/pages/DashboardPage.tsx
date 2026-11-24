@@ -46,6 +46,7 @@ import { WalletPanel } from "../components/WalletPanel";
 import { VisionCapture } from "../components/VisionCapture";
 import type { VisionWorkflow } from "@mizan/shared";
 import { useRefreshBilling } from "../hooks/useBilling";
+import { useWallet } from "../hooks/useWallet";
 import { BILLING_TEXT } from "../i18n/billingText";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
@@ -66,6 +67,7 @@ export function DashboardPage() {
     "dashboard" | "ledger" | "inventory" | "customers" | "rewards" | "credits"
   >(billingReturn === "return" || billingReturn === "dev" ? "credits" : "dashboard");
   const refreshBilling = useRefreshBilling();
+  const wallet = useWallet();
   const rewardsText = REWARDS_TEXT[language];
   const billingText = BILLING_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
@@ -261,6 +263,20 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("credits")}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                (wallet.data?.total ?? 1) <= 0
+                  ? "border-rose-200 bg-rose-50 text-rose-800"
+                  : (wallet.data?.total ?? 99) <= 10
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              }`}
+              title={billingText.remaining}
+            >
+              {wallet.data ? wallet.data.total : "—"} {t.creditsRemaining}
+            </button>
             <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
               {(["am", "om", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -478,6 +494,31 @@ export function DashboardPage() {
                 </p>
               </div>
             </div>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">{t.tillTitle}</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{t.tillHint}</p>
+                </div>
+              </div>
+              {(summary?.byPaymentMethod ?? []).every((row) => row.transactionCount === 0) && (
+                <p className="mt-2 text-xs text-slate-500">{t.tillEmpty}</p>
+              )}
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(summary?.byPaymentMethod ?? []).map((row) => (
+                  <div key={row.method} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-medium text-slate-500">
+                      {t.paymentMethods[row.method]}
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-900">
+                      {formatEtb(row.income)}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{row.transactionCount}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             {/* Charts Section */}
             <div className="grid gap-5 lg:grid-cols-12">
@@ -773,12 +814,32 @@ export function DashboardPage() {
           setVisionWorkflow("QUICK_SALE");
           setVisionOpen(true);
         }}
+        onOpenCredits={() => {
+          setAssistantOpen(false);
+          setActiveTab("credits");
+        }}
+        onRecordByHand={() => {
+          setAssistantOpen(false);
+          setTxModalState({ open: true, initialType: "INCOME", editing: null });
+        }}
       />
 
       {visionOpen && (
         <VisionCapture
           initialWorkflow={visionWorkflow}
           onClose={() => setVisionOpen(false)}
+          onOpenCredits={() => {
+            setVisionOpen(false);
+            setActiveTab("credits");
+          }}
+          onRecordByHand={() => {
+            setVisionOpen(false);
+            setTxModalState({
+              open: true,
+              initialType: visionWorkflow === "ADD_INVENTORY" ? "EXPENSE" : "INCOME",
+              editing: null,
+            });
+          }}
         />
       )}
     </div>

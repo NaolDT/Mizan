@@ -10,9 +10,11 @@ import type {
   VisionDetectedItem,
   VisionWorkflow,
 } from "@mizan/shared";
+import { CreditGate } from "./CreditGate";
 import { useLanguage } from "../context/LanguageContext";
+import { WALLET_KEY } from "../hooks/useWallet";
 import { VISION_TEXT } from "../i18n/visionText";
-import { apiRequest, apiUpload } from "../lib/api";
+import { apiRequest, apiUpload, isInsufficientCredits } from "../lib/api";
 import {
   compressImageFile,
   detectBarcodeFromBlob,
@@ -44,9 +46,16 @@ const WORKFLOWS: VisionWorkflow[] = [
 interface VisionCaptureProps {
   initialWorkflow?: VisionWorkflow;
   onClose: () => void;
+  onOpenCredits?: () => void;
+  onRecordByHand?: () => void;
 }
 
-export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: VisionCaptureProps) {
+export function VisionCapture({
+  initialWorkflow = "QUICK_SALE",
+  onClose,
+  onOpenCredits,
+  onRecordByHand,
+}: VisionCaptureProps) {
   const { language, t } = useLanguage();
   const text = VISION_TEXT[language];
   const queryClient = useQueryClient();
@@ -152,6 +161,7 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
       return apiUpload<VisionAnalyzeResponse>("/vision/analyze", form);
     },
     onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       const nextWorkflow =
         workflow === "GENERAL" && data.intentGuess && data.intentGuess !== "GENERAL"
           ? data.intentGuess
@@ -410,10 +420,18 @@ export function VisionCapture({ initialWorkflow = "QUICK_SALE", onClose }: Visio
                 {analyzeMutation.isPending ? text.analyzing : text.analyze}
               </button>
             </div>
-            {analyzeMutation.error && (
-              <p className="text-xs text-rose-600">
-                {analyzeMutation.error instanceof Error ? analyzeMutation.error.message : "Error"}
-              </p>
+            {isInsufficientCredits(analyzeMutation.error) ? (
+              <CreditGate
+                error={analyzeMutation.error}
+                onBuyCredits={onOpenCredits}
+                onRecordByHand={onRecordByHand}
+              />
+            ) : (
+              analyzeMutation.error && (
+                <p className="text-xs text-rose-600">
+                  {analyzeMutation.error instanceof Error ? analyzeMutation.error.message : "Error"}
+                </p>
+              )
             )}
             {analysis?.note && <p className="text-xs text-slate-500">{analysis.note}</p>}
             {analysis?.receipt && (analysis.receipt.supplier || analysis.receipt.total) && (

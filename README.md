@@ -4,6 +4,8 @@
 
 Mizan AI helps Ethiopian shopkeepers, traders, cafes, and micro-merchants record daily income and expenses, understand true net profit, and get grounded business insights using natural voice and chat in **Amharic (`አማርኛ`)**, **Afaan Oromo (`Afaan Oromoo`)**, and **English**.
 
+The general overview — objective, problem, solution, features, business rules, and stack — is in [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
+
 ---
 
 ## Monorepo Structure

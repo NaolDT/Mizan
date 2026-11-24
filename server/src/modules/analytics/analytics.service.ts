@@ -6,6 +6,8 @@ import type {
   FinancialSummaryDto,
   InsightItemDto,
   LanguageCode,
+  PaymentMethod,
+  PaymentMethodBreakdownItem,
   TransactionCategory,
   TransactionDto,
   TransactionType,
@@ -26,6 +28,31 @@ import { mapTransactionDto } from "../transactions/transaction.service.js";
 
 function toNumber2(dec: Prisma.Decimal): number {
   return Number(dec.toFixed(2));
+}
+
+const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "TELEBIRR", "BANK", "CREDIT"];
+
+function incomeByPaymentMethod(
+  rows: Array<{ type: TransactionType; paymentMethod: PaymentMethod; amount: Prisma.Decimal }>
+): PaymentMethodBreakdownItem[] {
+  const totals = new Map<PaymentMethod, { income: Prisma.Decimal; count: number }>(
+    PAYMENT_METHODS.map((method) => [method, { income: new Prisma.Decimal(0), count: 0 }])
+  );
+  for (const row of rows) {
+    if (row.type !== "INCOME") continue;
+    const entry = totals.get(row.paymentMethod);
+    if (!entry) continue;
+    entry.income = entry.income.plus(row.amount);
+    entry.count += 1;
+  }
+  return PAYMENT_METHODS.map((method) => {
+    const entry = totals.get(method)!;
+    return {
+      method,
+      income: toNumber2(entry.income),
+      transactionCount: entry.count,
+    };
+  });
 }
 
 function computeDeltaPct(current: Prisma.Decimal, previous: Prisma.Decimal): number | null {
@@ -75,6 +102,7 @@ export async function getFinancialSummary(
       select: {
         type: true,
         category: true,
+        paymentMethod: true,
         amount: true,
         transactionDate: true,
       },
@@ -246,6 +274,7 @@ export async function getFinancialSummary(
       vsPreviousExpensePct: computeDeltaPct(periodExpense, prevExpense),
     },
     byCategory,
+    byPaymentMethod: incomeByPaymentMethod(periodRows),
     dailySeries,
   };
 }

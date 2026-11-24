@@ -3,6 +3,32 @@ import type { ApiResponse } from "@mizan/shared";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const TOKEN_STORAGE_KEY = "mizan_auth_token";
 
+export class ApiClientError extends Error {
+  readonly code: string;
+  readonly details?: unknown;
+
+  constructor(message: string, code = "REQUEST_FAILED", details?: unknown) {
+    super(message);
+    this.name = "ApiClientError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function isInsufficientCredits(err: unknown): err is ApiClientError {
+  return err instanceof ApiClientError && err.code === "INSUFFICIENT_CREDITS";
+}
+
+export function creditDetails(err: unknown): { required: number; available: number } | null {
+  if (!isInsufficientCredits(err) || !err.details || typeof err.details !== "object") {
+    return null;
+  }
+  const details = err.details as { required?: unknown; available?: unknown };
+  const required = typeof details.required === "number" ? details.required : 0;
+  const available = typeof details.available === "number" ? details.available : 0;
+  return { required, available };
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
@@ -39,10 +65,10 @@ export async function apiRequest<T>(
   const payload = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || !payload.success) {
-    const message = !payload.success
-      ? payload.error.message
-      : `Request failed with status ${response.status}`;
-    throw new Error(message);
+    if (!payload.success) {
+      throw new ApiClientError(payload.error.message, payload.error.code, payload.error.details);
+    }
+    throw new ApiClientError(`Request failed with status ${response.status}`);
   }
 
   return payload.data;
@@ -118,7 +144,11 @@ export function apiUpload<T>(
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300 || !payload.success) {
-        reject(new Error(!payload.success ? payload.error.message : "Upload request failed"));
+        if (payload && !payload.success) {
+          reject(new ApiClientError(payload.error.message, payload.error.code, payload.error.details));
+          return;
+        }
+        reject(new ApiClientError("Upload request failed"));
         return;
       }
       resolve(payload.data);

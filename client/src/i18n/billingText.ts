@@ -42,6 +42,11 @@ export interface BillingText {
   cancelScheduled: string;
   paidUntil: string;
   manualNote: string;
+  gateTitle: string;
+  gateBody: string;
+  gateManual: string;
+  buyCredits: string;
+  recordByHand: string;
 }
 
 const en: BillingText = {
@@ -122,6 +127,11 @@ const en: BillingText = {
   cancelScheduled: "This plan ends on {date}. Credits already bought stay until they expire.",
   paidUntil: "Paid until {date}",
   manualNote: "Choosing a plan here starts a real payment. The Rewards tab can still change a plan only when manual billing is on.",
+  gateTitle: "Not enough AI credits",
+  gateBody: "You have {available} credits. This needs {required}. Buy credits or use a monthly plan to continue with voice, chat or camera.",
+  gateManual: "Recording a sale or expense by hand does not use AI credits.",
+  buyCredits: "Buy credits",
+  recordByHand: "Record by hand",
 };
 
 const am: BillingText = {
@@ -202,6 +212,11 @@ const am: BillingText = {
   cancelScheduled: "ይህ እቅድ በ{date} ያበቃል። የተገዛ ክሬዲት እስኪያልቅ ይቆያል።",
   paidUntil: "እስከ {date} ተከፍሏል",
   manualNote: "እቅድ መምረጥ እውነተኛ ክፍያ ይጀምራል። የሽልማት ገጽ እቅድ የሚቀይረው በእጅ ክፍያ ሲበራ ብቻ ነው።",
+  gateTitle: "በቂ AI ክሬዲት የለም",
+  gateBody: "{available} ክሬዲት አለዎት። ይህ {required} ይፈልጋል። በድምጽ፣ በጽሑፍ ወይም በካሜራ ለመቀጠል ክሬዲት ይግዙ ወይም ወርሃዊ እቅድ ይምረጡ።",
+  gateManual: "ገቢ ወይም ወጪ በእጅ መመዝገብ AI ክሬዲት አይጠቀምም።",
+  buyCredits: "ክሬዲት ግዛ",
+  recordByHand: "በእጅ መዝግብ",
 };
 
 const om: BillingText = {
@@ -282,6 +297,11 @@ const om: BillingText = {
   cancelScheduled: "Karoorri kun {date} tti ni xumurama. Kirediitiin bitame hamma xumuramutti tura.",
   paidUntil: "Hamma {date} kaffalame",
   manualNote: "Karoora filachuun kaffaltii dhugaa jalqaba. Fuulli badhaasa karoora yoo kaffaltiin harkaan baname qofa jijjiira.",
+  gateTitle: "Kirediitii AI gahaa hin qabdu",
+  gateBody: "Kirediitii {available} qabda. Kun {required} barbaada. Sagalee, barreeffama ykn kaameraa itti fufuuf kirediitii biti ykn karoora ji'aa filadhu.",
+  gateManual: "Galii ykn baasii harkaan galmeessuun kirediitii AI hin fayyadamu.",
+  buyCredits: "Kirediitii biti",
+  recordByHand: "Harkaan galmeessi",
 };
 
 export const BILLING_TEXT: Record<LanguageCode, BillingText> = { en, am, om };

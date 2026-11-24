@@ -27,6 +27,7 @@ import type {
   TransactionCategory,
   TtsResponse,
 } from "@mizan/shared";
+import { CreditGate } from "./CreditGate";
 import { SHOP_TEXT } from "../i18n/shopText";
 import { useLanguage } from "../context/LanguageContext";
 import {
@@ -34,10 +35,11 @@ import {
   SUBSCRIPTION_KEY,
   useSubscription,
 } from "../hooks/useBilling";
+import { WALLET_KEY } from "../hooks/useWallet";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 import { fill, REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
-import { apiRequest, apiUpload } from "../lib/api";
+import { apiRequest, apiUpload, isInsufficientCredits } from "../lib/api";
 import { playAssistantVoice, stopActiveAudio } from "../lib/audioPlayer";
 import { formatEtb } from "../lib/format";
 
@@ -346,6 +348,8 @@ interface AssistantDrawerProps {
   onClose: () => void;
   onOpenRewards?: () => void;
   onOpenCamera?: () => void;
+  onOpenCredits?: () => void;
+  onRecordByHand?: () => void;
 }
 
 export function AssistantDrawer({
@@ -355,6 +359,8 @@ export function AssistantDrawer({
   onClose,
   onOpenRewards,
   onOpenCamera,
+  onOpenCredits,
+  onRecordByHand,
 }: AssistantDrawerProps) {
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
@@ -373,7 +379,7 @@ export function AssistantDrawer({
   };
   const [inputText, setInputText] = useState("");
   const [autoSpeak, setAutoSpeak] = useState(true);
-  const [turnError, setTurnError] = useState<string | null>(null);
+  const [turnError, setTurnError] = useState<unknown>(null);
   const [voicePhase, setVoicePhase] = useState<
     "uploading" | "hearing" | "thinking" | "speaking" | null
   >(null);
@@ -459,12 +465,13 @@ export function AssistantDrawer({
     onSuccess: (turn) => {
       setTurnError(null);
       void queryClient.invalidateQueries({ queryKey: ["ai-conversation"] });
+      void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       void speakReply(
         turn.assistantMessage.spokenText || turn.assistantMessage.displayText
       );
     },
     onError: (err) => {
-      setTurnError(err instanceof Error ? err.message : "Chat failed");
+      setTurnError(err);
     },
   });
 
@@ -545,11 +552,12 @@ export function AssistantDrawer({
       setDraftTranscript("");
       setVoicePhase(null);
       await queryClient.invalidateQueries({ queryKey: ["ai-conversation"] });
+      await queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       await speakReply(
         turn.assistantMessage.spokenText || turn.assistantMessage.displayText
       );
     } catch (err) {
-      setTurnError(err instanceof Error ? err.message : "Voice request failed");
+      setTurnError(err);
       setVoicePhase(null);
       setDraftTranscript("");
     } finally {
@@ -776,9 +784,21 @@ export function AssistantDrawer({
             </div>
           )}
 
-          {(micError || turnError) && (
+          {isInsufficientCredits(turnError) && (
+            <CreditGate
+              error={turnError}
+              onBuyCredits={onOpenCredits}
+              onRecordByHand={onRecordByHand}
+            />
+          )}
+          {micError && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
-              {micError || turnError}
+              {micError}
+            </div>
+          )}
+          {Boolean(turnError) && !isInsufficientCredits(turnError) && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
+              {turnError instanceof Error ? turnError.message : "Request failed"}
             </div>
           )}
 

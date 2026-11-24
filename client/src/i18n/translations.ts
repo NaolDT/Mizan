@@ -34,6 +34,10 @@ export interface UiDictionary {
   periodNetCashFlow: string;
   operatingProfitHint: string;
   creditReceivableHint: string;
+  tillTitle: string;
+  tillHint: string;
+  tillEmpty: string;
+  creditsRemaining: string;
   rangeToday: string;
   rangeWeek: string;
   rangeMonth: string;
@@ -117,6 +121,10 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     periodNetCashFlow: "የወቅቱ የተጣራ ገንዘብ ፍሰት",
     operatingProfitHint: "የሥራ ትርፍ (ከዕቃ ግዢ በፊት)",
     creditReceivableHint: "በዱቤ የሚጠበቅ ገንዘብ",
+    tillTitle: "ገቢ እንዴት ገባ",
+    tillHint: "ጥሬ ገንዘብ እና ቴሌብር በሱቁ ውስጥ ናቸው። ዱቤ ገና አልተከፈለም።",
+    tillEmpty: "በዚህ ጊዜ በዚህ ዘዴ የተመዘገበ ገቢ የለም።",
+    creditsRemaining: "AI ክሬዲት",
     rangeToday: "ዛሬ",
     rangeWeek: "ባለፉት 7 ቀናት",
     rangeMonth: "በዚህ ወር",
@@ -229,6 +237,10 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     periodNetCashFlow: "Sochii Maallaqaa Qulqulluu",
     operatingProfitHint: "Bu'aa Hojii (Bittaa meeshaa dura)",
     creditReceivableHint: "Maallaqa Liqaadhaan Eegamu",
+    tillTitle: "Galii akkamitti seene",
+    tillHint: "Maallaqni fi Telebirr suuqii keessa jiru. Liqaan amma hin kaffalamne.",
+    tillEmpty: "Yeroo kana karaa kanaan galii hin galmaa'in.",
+    creditsRemaining: "AI kirediitii",
     rangeToday: "Har'a",
     rangeWeek: "Guyyoota 7 Darban",
     rangeMonth: "Ji'a Kana",
@@ -341,6 +353,10 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     periodNetCashFlow: "Period Net Cash Flow",
     operatingProfitHint: "Operating Profit (excl. restock)",
     creditReceivableHint: "Uncollected Credit Sales",
+    tillTitle: "How money came in",
+    tillHint: "Cash and Telebirr are in the shop. Credit sales are still owed.",
+    tillEmpty: "No income recorded this way in this period.",
+    creditsRemaining: "AI credits",
     rangeToday: "Today",
     rangeWeek: "Last 7 Days",
     rangeMonth: "This Month",

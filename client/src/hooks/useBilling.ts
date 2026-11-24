@@ -8,6 +8,7 @@ import type {
   SubscriptionSummaryDto,
 } from "@mizan/shared";
 import { apiRequest } from "../lib/api";
+import { WALLET_KEY } from "./useWallet";
 
 export const SUBSCRIPTION_KEY = ["subscription"] as const;
 export const REWARDS_KEY = ["rewards"] as const;
@@ -77,5 +78,6 @@ export function useRefreshBilling() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });
     void queryClient.invalidateQueries({ queryKey: REWARDS_KEY });
+    void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
   };
 }

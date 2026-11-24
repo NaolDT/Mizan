@@ -217,6 +217,12 @@ export interface DailyCashFlowPoint {
   netProfit: number;
 }
 
+export interface PaymentMethodBreakdownItem {
+  method: PaymentMethod;
+  income: number;
+  transactionCount: number;
+}
+
 export interface FinancialSummaryDto {
   currency: "ETB";
   range: Exclude<DateRangePreset, "all">;
@@ -239,6 +245,7 @@ export interface FinancialSummaryDto {
     vsPreviousExpensePct: number | null;
   };
   byCategory: CategoryBreakdownItem[];
+  byPaymentMethod: PaymentMethodBreakdownItem[];
   dailySeries: DailyCashFlowPoint[];
 }
 
