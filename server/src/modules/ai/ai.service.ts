@@ -366,6 +366,47 @@ function shortError(message: string): string {
   return compact.length > 180 ? `${compact.slice(0, 180)}…` : compact;
 }
 
+interface ConversationFocus {
+  productName: string | null;
+  customerName: string | null;
+}
+
+function resolveConversationFocus(
+  history: Array<{ displayText: string; proposedAction: unknown }>,
+  ctx: AiBusinessContextSnapshot,
+  currentText: string
+): ConversationFocus {
+  const productNames = [...ctx.products.map((p) => p.name)].sort((a, b) => b.length - a.length);
+  const customerNames = ctx.customersOwing.map((c) => c.name);
+  const haystacks = [currentText, ...[...history].reverse().map((m) => m.displayText)];
+
+  const findName = (names: string[], text: string): string | null => {
+    const lower = text.toLowerCase();
+    return names.find((name) => lower.includes(name.toLowerCase())) ?? null;
+  };
+
+  let productName: string | null = null;
+  let customerName: string | null = null;
+  for (const text of haystacks) {
+    productName = productName ?? findName(productNames, text);
+    customerName = customerName ?? findName(customerNames, text);
+    if (productName && customerName) break;
+  }
+
+  for (const message of [...history].reverse()) {
+    const draft = message.proposedAction as ProposedActionDraft | null;
+    if (!draft) continue;
+    if (!productName && "productName" in draft && draft.productName) {
+      productName = draft.productName;
+    }
+    if (!customerName && "customerName" in draft && draft.customerName) {
+      customerName = draft.customerName;
+    }
+  }
+
+  return { productName, customerName };
+}
+
 function isRetryableModelError(err: unknown): boolean {
   const status = readErrorStatus(err);
   const message = err instanceof Error ? err.message : String(err);
@@ -385,7 +426,8 @@ function buildDeterministicFallbackResult(
   userText: string,
   language: LanguageCode,
   ctx: AiBusinessContextSnapshot,
-  hasPendingDraft: boolean
+  hasPendingDraft: boolean,
+  focus: ConversationFocus
 ): StructuredLlmResult {
   const lower = userText.toLowerCase();
   const todayStr = ctx.eatTodayDate;
@@ -423,7 +465,10 @@ function buildDeterministicFallbackResult(
       userText
     );
 
+  const isSoldAsk =
+    /(how many did i sell|sold this|quantity sold|ስንት ሸጥ|ምን ያህል ሸጥ|meeqa gurgure)/i.test(userText);
   const isInventoryAsk =
+    !isSoldAsk &&
     /(how many|in stock|inventory|low stock|ክምችት|ቀርቷል|ዘይት|kuufama|meeqa qaba)/i.test(userText);
   const isStockAdjust =
     /(add .+ stock|restock|add \d+|ክምችት ጨምር|kuufama dabali)/i.test(userText);
@@ -454,8 +499,44 @@ function buildDeterministicFallbackResult(
     };
   }
 
+  const refersToFocus =
+    Boolean(focus.productName) &&
+    /(that|this|it|the product|ያ|ይህ|እሱ|እቃው|isa|sun|kun|meeshaa sana)/i.test(userText);
+
+  if (isSoldAsk && ctx.products.length > 0) {
+    const named =
+      ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase())) ??
+      ctx.products.find((p) => p.name === focus.productName);
+    const useWeek = /(week|ሳምንት|torban)/i.test(userText);
+    const qty = named ? (useWeek ? named.quantitySoldWeek : named.quantitySoldMonth) : 0;
+    const periodLabel =
+      language === "am" ? (useWeek ? "በዚህ ሳምንት" : "በዚህ ወር") : language === "om" ? (useWeek ? "torban kana" : "ji'a kana") : useWeek ? "this week" : "this month";
+    const displayMessage = !named
+      ? language === "am"
+        ? "የትኛው እቃ እንደተሸጠ ይንገሩኝ።"
+        : language === "om"
+          ? "Meeshaan kami akka gurgurame natti himi."
+          : "Tell me which product you mean."
+      : language === "am"
+        ? `${named.name} ${periodLabel} ${qty} ${named.unit} ተሽጧል።`
+        : language === "om"
+          ? `${named.name} ${periodLabel} ${qty} ${named.unit} gurgurameera.`
+          : `You sold ${qty} ${named.unit} of ${named.name} ${periodLabel}.`;
+    return {
+      intent: "query_inventory",
+      confidence: 0.92,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
   if (isInventoryAsk && ctx.products.length > 0) {
-    const named = ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase()));
+    const named =
+      ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase())) ??
+      (refersToFocus
+        ? ctx.products.find((p) => p.name === focus.productName)
+        : undefined);
     const low = ctx.products.filter((p) => p.isLowStock);
     const displayMessage = named
       ? language === "am"
@@ -558,6 +639,57 @@ function buildDeterministicFallbackResult(
     };
   }
 
+  const isRunOut =
+    /(run out|last|how many days|days left|መቼ ይጨርሳል|ስንት ቀን|hanga guyyaa|yeroo meeqa)/i.test(userText);
+  if (isRunOut && ctx.products.length > 0) {
+    const named =
+      ctx.products.find((p) => userText.toLowerCase().includes(p.name.toLowerCase())) ??
+      ctx.products.find((p) => p.name === focus.productName);
+    const displayMessage = !named
+      ? language === "am"
+        ? "የትኛው እቃ እንደሚጨርስ ይንገሩኝ።"
+        : language === "om"
+          ? "Meeshaan kami akka dhumu natti himi."
+          : "Tell me which product you mean."
+      : named.coverConfidence === "none" || named.daysOfCover == null
+        ? language === "am"
+          ? `${named.name} አሁን ${named.quantityOnHand} ${named.unit} አለው። በቅርብ ጊዜ የተገናኘ ሽያጭ ስለሌለ መጨረሻውን መገመት አልችልም።`
+          : language === "om"
+            ? `${named.name} amma ${named.quantityOnHand} ${named.unit} qaba. Gurgurtaa hidhataa dhiyoo waan hin jirreef yeroo dhumuu tilmaamuun hin danda'amu.`
+            : `${named.name} currently has ${named.quantityOnHand} ${named.unit}. There are not enough linked sales to estimate when it may run out.`
+        : language === "am"
+          ? `${named.name} አሁን ${named.quantityOnHand} ${named.unit} አለው። በቅርብ ሽያጭ ወደ ${named.daysOfCover} ቀን ሊቆይ ይችላል${named.coverConfidence === "uncertain" ? "፤ ግምቱ እርግጠኛ አይደለም" : ""}።`
+          : language === "om"
+            ? `${named.name} amma ${named.quantityOnHand} ${named.unit} qaba. Gurgurtaa dhiyoo irratti guyyaa ${named.daysOfCover} turuu danda'a${named.coverConfidence === "uncertain" ? "; tilmaamni hin mirkanaa'u" : ""}.`
+            : `${named.name} currently has ${named.quantityOnHand} ${named.unit}. Based on recent sales it may last about ${named.daysOfCover} days${named.coverConfidence === "uncertain" ? "; this estimate is uncertain" : ""}.`;
+    return {
+      intent: "query_inventory",
+      confidence: 0.9,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
+  const isCashAsk =
+    /(cash collected|how much cash|drawer|ጥሬ ገንዘብ|ዱቤ አይደለም|maallaqa harka|liqaa miti)/i.test(userText);
+  if (isCashAsk) {
+    const cash = ctx.monthCashFlow;
+    const displayMessage =
+      language === "am"
+        ? `በዚህ ወር የተሰበሰበ ገንዘብ ${cash.collectedIn.toLocaleString("en-US")} ETB ነው (ጥሬ ${cash.cashIn.toLocaleString("en-US")}፣ ቴሌብር ${cash.telebirrIn.toLocaleString("en-US")}፣ ባንክ ${cash.bankIn.toLocaleString("en-US")}፣ የዱቤ ክፍያ ${cash.collections.toLocaleString("en-US")})። ዱቤ ሽያጭ ${cash.creditSales.toLocaleString("en-US")} ETB ገና አልተከፈለም።`
+        : language === "om"
+          ? `Ji'a kana maallaqni walitti qabame ETB ${cash.collectedIn.toLocaleString("en-US")} dha (harka ${cash.cashIn.toLocaleString("en-US")}, Telebirr ${cash.telebirrIn.toLocaleString("en-US")}, baankii ${cash.bankIn.toLocaleString("en-US")}, kaffaltii liqaa ${cash.collections.toLocaleString("en-US")}). Gurgurtaa liqaa ETB ${cash.creditSales.toLocaleString("en-US")} amma hin kaffalamne.`
+          : `This month you collected ${cash.collectedIn.toLocaleString("en-US")} ETB (cash ${cash.cashIn.toLocaleString("en-US")}, Telebirr ${cash.telebirrIn.toLocaleString("en-US")}, bank ${cash.bankIn.toLocaleString("en-US")}, collections ${cash.collections.toLocaleString("en-US")}). Credit sales of ${cash.creditSales.toLocaleString("en-US")} ETB are still owed, not cash in the shop.`;
+    return {
+      intent: "query_financial_summary",
+      confidence: 0.93,
+      displayMessage,
+      spokenMessage: normalizeSpokenText(displayMessage, language),
+      proposedTransaction: null,
+    };
+  }
+
   if (/(best.?sell|most.?sold|slow.?mov|የተሸጠ|gurgurtaa)/i.test(userText) && ctx.topSelling.length > 0) {
     const top = ctx.topSelling[0];
     const displayMessage =
@@ -604,10 +736,11 @@ async function runGroundedLlmReasoning(
   language: LanguageCode,
   ctx: AiBusinessContextSnapshot,
   recentHistory: Array<{ role: "USER" | "ASSISTANT"; text: string }>,
-  pendingDraft: ProposedActionDraft | null
+  pendingDraft: ProposedActionDraft | null,
+  focus: ConversationFocus
 ): Promise<StructuredLlmResult> {
   if (!env.GEMINI_API_KEY) {
-    return buildDeterministicFallbackResult(userText, language, ctx, Boolean(pendingDraft));
+    return buildDeterministicFallbackResult(userText, language, ctx, Boolean(pendingDraft), focus);
   }
 
   const languageDirective =
@@ -630,7 +763,10 @@ CRITICAL SAFETY & DETERMINISTIC RULES:
    - NEVER claim the change is already saved. Ask them to confirm the preview.
 4. Inventory: for stock questions use PRODUCTS_JSON only. For adding/removing stock, set intent = "adjust_stock" and fill proposedStock (quantityDelta positive for restock, negative for sale/use). If the product name is unclear, ask which product.
 5. Customers: for "how much does X owe" use CUSTOMERS_OWING_JSON only. For "X paid me N birr", set intent = "record_customer_payment" and fill proposedPayment. Never invent a balance.
-6. Keep responses concise (2-4 short sentences) so voice playback stays short.
+6. Cash vs credit: CASH_FLOW_JSON is authoritative. Credit sales are NOT cash collected. Collections are customer debt payments (cash in, not new revenue).
+7. Days of stock: PRODUCT_COVER_JSON. If coverConfidence is "none" or daysOfCover is null, say more linked sales are needed. If "uncertain", say the estimate is uncertain. NEVER invent a day count.
+8. Follow-ups: CONVERSATION_FOCUS_JSON is the product or customer just discussed. If the merchant says "that", "it", or "this week" without naming one, use that focus.
+9. Keep responses concise (2-4 short sentences) so voice playback stays short.
 
 ACTIVE_PENDING_CONFIRMATION_DRAFT:
 ${pendingDraft ? JSON.stringify(pendingDraft) : "NONE"}
@@ -651,6 +787,36 @@ ${JSON.stringify({
     description: tx.description,
   })),
   products: ctx.products,
+  productCover: ctx.products.map((p) => ({
+    name: p.name,
+    quantityOnHand: p.quantityOnHand,
+    unit: p.unit,
+    dailySalesRate: p.dailySalesRate,
+    daysOfCover: p.daysOfCover,
+    coverConfidence: p.coverConfidence,
+  })),
+  cashFlow: {
+    week: {
+      collectedIn: ctx.weekCashFlow.collectedIn,
+      creditSales: ctx.weekCashFlow.creditSales,
+      collections: ctx.weekCashFlow.collections,
+      spent: ctx.weekCashFlow.spent,
+      netCashMovement: ctx.weekCashFlow.netCashMovement,
+      outstanding: ctx.weekCashFlow.outstanding,
+    },
+    month: {
+      collectedIn: ctx.monthCashFlow.collectedIn,
+      cashIn: ctx.monthCashFlow.cashIn,
+      telebirrIn: ctx.monthCashFlow.telebirrIn,
+      bankIn: ctx.monthCashFlow.bankIn,
+      creditSales: ctx.monthCashFlow.creditSales,
+      collections: ctx.monthCashFlow.collections,
+      spent: ctx.monthCashFlow.spent,
+      netCashMovement: ctx.monthCashFlow.netCashMovement,
+      outstanding: ctx.monthCashFlow.outstanding,
+    },
+  },
+  conversationFocus: focus,
   topSelling: ctx.topSelling,
   inventoryValuation: ctx.inventoryValuation,
   customersOwing: ctx.customersOwing,
@@ -729,7 +895,7 @@ ${JSON.stringify({
     }
   }
 
-  return buildDeterministicFallbackResult(userText, language, ctx, Boolean(pendingDraft));
+  return buildDeterministicFallbackResult(userText, language, ctx, Boolean(pendingDraft), focus);
 }
 
 export async function processAssistantTurn(params: {
@@ -789,12 +955,19 @@ export async function processAssistantTurn(params: {
     },
   });
 
+  const conversationFocus = resolveConversationFocus(
+    orderedPrior,
+    contextSnapshot,
+    trimmedText
+  );
+
   const llmOutput = await runGroundedLlmReasoning(
     trimmedText,
     params.language,
     contextSnapshot,
     orderedPrior.map((m) => ({ role: m.role, text: m.displayText })),
-    (latestPendingMsg?.proposedAction as ProposedActionDraft | null) ?? null
+    (latestPendingMsg?.proposedAction as ProposedActionDraft | null) ?? null,
+    conversationFocus
   );
 
   let validatedDraft: ProposedActionDraft | null = null;

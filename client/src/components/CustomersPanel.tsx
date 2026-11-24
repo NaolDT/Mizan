@@ -84,6 +84,8 @@ export function CustomersPanel() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       if (selectedId === id) setSelectedId(null);
     },
   });
@@ -99,6 +101,8 @@ export function CustomersPanel() {
       queryClient.invalidateQueries({ queryKey: ["customer"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       setPayAmount("");
     },
   });

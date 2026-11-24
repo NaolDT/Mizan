@@ -67,3 +67,14 @@ export function getEatDateWindow(
     previousEndUtc: new Date(prevMonthEndMs),
   };
 }
+
+/** Inclusive EAT calendar days in the reporting window (today=1, week=7, month=day-of-month). */
+export function countEatPeriodDays(
+  range: "today" | "week" | "month",
+  now: Date = new Date()
+): number {
+  if (range === "today") return 1;
+  if (range === "week") return 7;
+  const eatNow = new Date(now.getTime() + EAT_OFFSET_MS);
+  return eatNow.getUTCDate();
+}

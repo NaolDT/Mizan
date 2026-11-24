@@ -587,6 +587,8 @@ export interface AdjustStockRequest {
   note?: string;
 }
 
+export type StockCoverConfidence = "estimated" | "uncertain" | "none";
+
 export interface ProductProfitabilityDto {
   productId: string;
   name: string;
@@ -598,6 +600,85 @@ export interface ProductProfitabilityDto {
   cogs: number | null;
   grossProfit: number | null;
   stockCostValue: number | null;
+  dailySalesRate: number | null;
+  daysOfCover: number | null;
+  coverConfidence: StockCoverConfidence;
+}
+
+export interface CashFlowDailyPoint {
+  date: string; // YYYY-MM-DD in Africa/Addis_Ababa
+  collected: number;
+  spent: number;
+  net: number;
+}
+
+export interface CashFlowDto {
+  currency: "ETB";
+  range: Exclude<DateRangePreset, "all">;
+  generatedAtEat: string;
+  periodDays: number;
+  cashIn: number;
+  telebirrIn: number;
+  bankIn: number;
+  creditSales: number;
+  collections: number;
+  cashOut: number;
+  telebirrOut: number;
+  bankOut: number;
+  creditPurchases: number;
+  collectedIn: number;
+  spent: number;
+  netCashMovement: number;
+  outstanding: number;
+  customersOwingCount: number;
+  dailySeries: CashFlowDailyPoint[];
+}
+
+export interface AdvisorFindingDto {
+  id: string;
+  severity: InsightSeverity;
+  title: string;
+  body: string;
+}
+
+export interface AdvisorProductRefDto {
+  name: string;
+  quantityOnHand: number;
+  quantitySold: number;
+  revenue: number;
+  grossProfit: number | null;
+  dailySalesRate: number | null;
+  daysOfCover: number | null;
+  coverConfidence: StockCoverConfidence;
+}
+
+export interface AdvisorReportDto {
+  currency: "ETB";
+  range: Exclude<DateRangePreset, "all">;
+  generatedAtEat: string;
+  dataSufficient: boolean;
+  overview: AdvisorFindingDto;
+  metrics: {
+    income: number;
+    expense: number;
+    netProfit: number;
+    cashCollected: number;
+    creditSales: number;
+    collections: number;
+    cashSpent: number;
+    netCashMovement: number;
+    outstanding: number;
+    inventoryCostValue: number;
+  };
+  positives: AdvisorFindingDto[];
+  problems: AdvisorFindingDto[];
+  actions: AdvisorFindingDto[];
+  products: {
+    best: AdvisorProductRefDto | null;
+    slow: AdvisorProductRefDto[];
+    lowStock: AdvisorProductRefDto[];
+    daysOfCover: AdvisorProductRefDto[];
+  };
 }
 
 export interface InventoryValuationDto {

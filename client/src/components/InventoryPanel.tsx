@@ -127,6 +127,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       resetForm();
     },
@@ -141,6 +143,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       queryClient.invalidateQueries({ queryKey: ["product-profit"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       queryClient.invalidateQueries({ queryKey: ["price-history"] });
@@ -166,6 +170,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       queryClient.invalidateQueries({ queryKey: ["product-profit"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
     },
@@ -181,6 +187,8 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-valuation"] });
       setAdjusting(null);
     },
@@ -502,6 +510,11 @@ export function InventoryPanel({ onScanProduct }: { onScanProduct?: () => void }
                 <li key={row.productId} className="flex items-center justify-between py-2 text-xs">
                   <span className="text-slate-700">
                     {row.name} · {text.sold} {row.quantitySold} {row.unit}
+                    {row.daysOfCover != null
+                      ? ` · ${row.daysOfCover} ${text.daysLeft}${
+                          row.coverConfidence === "uncertain" ? ` (${text.coverUncertain})` : ""
+                        }`
+                      : ""}
                   </span>
                   <span className="font-bold text-slate-900">
                     {row.grossProfit != null

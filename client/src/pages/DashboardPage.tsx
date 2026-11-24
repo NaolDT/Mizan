@@ -39,6 +39,8 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { MizanLogoMark } from "../components/brand/MizanLogo";
 import { CustomersPanel } from "../components/CustomersPanel";
+import { AdvisorPanel } from "../components/AdvisorPanel";
+import { CashPositionPanel } from "../components/CashPositionPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
@@ -128,6 +130,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       window.setTimeout(refreshBilling, 1500);
     },
   });
@@ -150,6 +154,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
     },
   });
 
@@ -164,6 +170,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
     },
   });
 
@@ -396,9 +404,6 @@ export function DashboardPage() {
 
         {activeTab === "dashboard" && (
           <>
-            <InsightsStrip range={range} />
-
-            {/* Range Selector */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-700">
                 {t.dashboardTab}
@@ -426,6 +431,9 @@ export function DashboardPage() {
                 ))}
               </div>
             </div>
+
+            <InsightsStrip range={range} />
+            <AdvisorPanel range={range} />
 
             {/* 4 Deterministic KPI Cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -519,6 +527,8 @@ export function DashboardPage() {
                 ))}
               </div>
             </section>
+
+            <CashPositionPanel range={range} />
 
             {/* Charts Section */}
             <div className="grid gap-5 lg:grid-cols-12">

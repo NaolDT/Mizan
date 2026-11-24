@@ -127,6 +127,8 @@ function PendingActionCard({ message, onConfirmed }: PendingActionCardProps) {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["customer"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+      queryClient.invalidateQueries({ queryKey: ["advisor"] });
       window.setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: REWARDS_KEY });
         void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });

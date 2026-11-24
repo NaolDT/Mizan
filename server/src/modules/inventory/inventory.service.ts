@@ -13,7 +13,8 @@ import type {
 } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
-import { getEatDateWindow } from "../../utils/eatDate.js";
+import { countEatPeriodDays, getEatDateWindow } from "../../utils/eatDate.js";
+import { computeDaysOfCover } from "../analytics/stockCover.js";
 import { toNameKey } from "../customers/customers.service.js";
 
 function toNumber2(dec: Prisma.Decimal): number {
@@ -440,6 +441,9 @@ export async function getProductProfitability(
     dateFilter = { gte: window.startUtc, lte: window.endUtc };
   }
 
+  const periodDays =
+    range === "today" || range === "week" || range === "month" ? countEatPeriodDays(range) : 30;
+
   const [products, sales] = await Promise.all([
     prisma.product.findMany({ where: { businessId }, orderBy: { name: "asc" } }),
     prisma.transaction.findMany({
@@ -480,6 +484,12 @@ export async function getProductProfitability(
       const grossProfit = cogs != null ? revenue.minus(cogs) : null;
       const stockCostValue =
         product.costPrice != null ? product.costPrice.mul(product.quantityOnHand) : null;
+      const cover = computeDaysOfCover({
+        quantityOnHand: product.quantityOnHand,
+        quantitySold,
+        salesCount: agg?.count ?? 0,
+        periodDays,
+      });
       return {
         productId: product.id,
         name: product.name,
@@ -491,6 +501,9 @@ export async function getProductProfitability(
         cogs: cogs != null ? toNumber2(cogs) : null,
         grossProfit: grossProfit != null ? toNumber2(grossProfit) : null,
         stockCostValue: stockCostValue != null ? toNumber2(stockCostValue) : null,
+        dailySalesRate: cover.dailySalesRate,
+        daysOfCover: cover.daysOfCover,
+        coverConfidence: cover.coverConfidence,
       };
     })
     .sort((a, b) => b.revenue - a.revenue);

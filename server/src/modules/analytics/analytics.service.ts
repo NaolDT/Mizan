@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import type {
+  AdvisorReportDto,
   BusinessInsightsDto,
+  CashFlowDto,
   CategoryBreakdownItem,
   DailyCashFlowPoint,
   FinancialSummaryDto,
@@ -14,10 +16,13 @@ import type {
 } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import {
+  countEatPeriodDays,
   formatEatDateKey,
   formatEatIsoTimestamp,
   getEatDateWindow,
 } from "../../utils/eatDate.js";
+import { composeAdvisorReport } from "./advisor.compose.js";
+import { accumulateCashFlow, serializeCashTotals } from "./cashflow.math.js";
 import {
   getInventoryValuation,
   getProductProfitability,
@@ -279,6 +284,100 @@ export async function getFinancialSummary(
   };
 }
 
+export async function getCashFlow(
+  businessId: string,
+  range: "today" | "week" | "month" = "month"
+): Promise<CashFlowDto> {
+  const now = new Date();
+  const periodWindow = getEatDateWindow(range, now);
+  const periodDays = countEatPeriodDays(range, now);
+
+  const dateKeys: string[] = [];
+  const dayMs = 24 * 60 * 60 * 1000;
+  const maxDays = range === "today" ? 1 : range === "week" ? 7 : 31;
+  for (
+    let cursorMs = periodWindow.startUtc.getTime(), guard = 0;
+    cursorMs <= periodWindow.endUtc.getTime() && guard <= maxDays;
+    cursorMs += dayMs, guard++
+  ) {
+    dateKeys.push(formatEatDateKey(new Date(cursorMs + 12 * 60 * 60 * 1000)));
+  }
+
+  const [periodRows, collectionRows, outstanding] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        businessId,
+        status: "COMPLETED",
+        transactionDate: {
+          gte: periodWindow.startUtc,
+          lte: periodWindow.endUtc,
+        },
+      },
+      select: {
+        type: true,
+        paymentMethod: true,
+        amount: true,
+        transactionDate: true,
+      },
+    }),
+    prisma.customerLedger.findMany({
+      where: {
+        businessId,
+        type: "PAYMENT",
+        createdAt: {
+          gte: periodWindow.startUtc,
+          lte: periodWindow.endUtc,
+        },
+      },
+      select: { amount: true, createdAt: true },
+    }),
+    outstandingTotals(businessId),
+  ]);
+
+  const { totals, dailySeries } = accumulateCashFlow({
+    transactions: periodRows,
+    collections: collectionRows,
+    dateKeys,
+    formatDateKey: formatEatDateKey,
+  });
+
+  return {
+    currency: "ETB",
+    range,
+    generatedAtEat: formatEatIsoTimestamp(now),
+    periodDays,
+    ...serializeCashTotals(totals),
+    outstanding: Number(outstanding.outstandingTotal.toFixed(2)),
+    customersOwingCount: outstanding.customersOwingCount,
+    dailySeries,
+  };
+}
+
+export async function getAdvisorReport(
+  businessId: string,
+  range: "today" | "week" | "month" = "month",
+  language: LanguageCode = "en"
+): Promise<AdvisorReportDto> {
+  const [summary, cashFlow, insights, profits, lowStock, valuation] = await Promise.all([
+    getFinancialSummary(businessId, range),
+    getCashFlow(businessId, range),
+    getBusinessInsights(businessId, range, language),
+    getProductProfitability(businessId, range),
+    listLowStock(businessId),
+    getInventoryValuation(businessId),
+  ]);
+
+  return composeAdvisorReport({
+    language,
+    summary,
+    cashFlow,
+    insights,
+    profits,
+    lowStock,
+    valuation,
+  });
+}
+
 export interface AiBusinessContextSnapshot {
   business: {
     name: string;
@@ -290,8 +389,20 @@ export interface AiBusinessContextSnapshot {
   eatIsoTimestamp: string;
   weekSummary: FinancialSummaryDto["period"];
   monthSummary: FinancialSummaryDto;
+  weekCashFlow: CashFlowDto;
+  monthCashFlow: CashFlowDto;
   recentTransactions: TransactionDto[];
-  products: Array<{ name: string; quantityOnHand: number; unit: string; isLowStock: boolean }>;
+  products: Array<{
+    name: string;
+    quantityOnHand: number;
+    unit: string;
+    isLowStock: boolean;
+    quantitySoldWeek: number;
+    quantitySoldMonth: number;
+    dailySalesRate: number | null;
+    daysOfCover: number | null;
+    coverConfidence: "estimated" | "uncertain" | "none";
+  }>;
   topSelling: Array<{ name: string; revenue: number; quantitySold: number }>;
   inventoryValuation: { costValue: number; retailValue: number };
   customersOwing: Array<{ name: string; outstandingBalance: number }>;
@@ -300,7 +411,7 @@ export interface AiBusinessContextSnapshot {
 export async function buildAiContextSnapshot(
   businessId: string
 ): Promise<AiBusinessContextSnapshot> {
-  const [business, weekSummary, monthSummary, recentRows, products, customers, profits, valuation] =
+  const [business, weekSummary, monthSummary, weekCashFlow, monthCashFlow, recentRows, products, customers, weekProfits, profits, valuation] =
     await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
@@ -308,6 +419,8 @@ export async function buildAiContextSnapshot(
     }),
     getFinancialSummary(businessId, "week"),
     getFinancialSummary(businessId, "month"),
+    getCashFlow(businessId, "week"),
+    getCashFlow(businessId, "month"),
     prisma.transaction.findMany({
       where: { businessId, status: "COMPLETED" },
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
@@ -325,6 +438,7 @@ export async function buildAiContextSnapshot(
       take: 20,
       select: { id: true, name: true },
     }),
+    getProductProfitability(businessId, "week"),
     getProductProfitability(businessId, "month"),
     getInventoryValuation(businessId),
   ]);
@@ -353,13 +467,24 @@ export async function buildAiContextSnapshot(
     eatIsoTimestamp: formatEatIsoTimestamp(),
     weekSummary: weekSummary.period,
     monthSummary,
+    weekCashFlow,
+    monthCashFlow,
     recentTransactions: recentRows.map(mapTransactionDto),
-    products: products.map((p) => ({
-      name: p.name,
-      quantityOnHand: Number(p.quantityOnHand.toFixed(2)),
-      unit: p.unit,
-      isLowStock: p.lowStockThreshold.gt(0) && p.quantityOnHand.lte(p.lowStockThreshold),
-    })),
+    products: products.map((p) => {
+      const monthRow = profits.find((row) => row.name === p.name);
+      const weekRow = weekProfits.find((row) => row.name === p.name);
+      return {
+        name: p.name,
+        quantityOnHand: Number(p.quantityOnHand.toFixed(2)),
+        unit: p.unit,
+        isLowStock: p.lowStockThreshold.gt(0) && p.quantityOnHand.lte(p.lowStockThreshold),
+        quantitySoldWeek: weekRow?.quantitySold ?? 0,
+        quantitySoldMonth: monthRow?.quantitySold ?? 0,
+        dailySalesRate: monthRow?.dailySalesRate ?? null,
+        daysOfCover: monthRow?.daysOfCover ?? null,
+        coverConfidence: monthRow?.coverConfidence ?? "none",
+      };
+    }),
     topSelling: profits
       .filter((p) => p.quantitySold > 0)
       .slice(0, 5)

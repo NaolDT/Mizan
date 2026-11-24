@@ -37,6 +37,18 @@ export interface UiDictionary {
   tillTitle: string;
   tillHint: string;
   tillEmpty: string;
+  cashPositionTitle: string;
+  cashPositionHint: string;
+  cashCollected: string;
+  cashSpent: string;
+  collectionsLabel: string;
+  creditSalesLabel: string;
+  netCashMovement: string;
+  outstandingNow: string;
+  advisorTitle: string;
+  advisorPositives: string;
+  advisorProblems: string;
+  advisorActions: string;
   creditsRemaining: string;
   rangeToday: string;
   rangeWeek: string;
@@ -124,6 +136,18 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     tillTitle: "ገቢ እንዴት ገባ",
     tillHint: "ጥሬ ገንዘብ እና ቴሌብር በሱቁ ውስጥ ናቸው። ዱቤ ገና አልተከፈለም።",
     tillEmpty: "በዚህ ጊዜ በዚህ ዘዴ የተመዘገበ ገቢ የለም።",
+    cashPositionTitle: "የገንዘብ አቋም",
+    cashPositionHint: "ዱቤ ሽያጭ ገቢ ነው እንጂ በሱቁ ውስጥ ያለ ገንዘብ አይደለም። የደንበኛ ክፍያ ወደ ሱቁ ይገባል እንጂ አዲስ ሽያጭ አይደለም።",
+    cashCollected: "የተሰበሰበ ገንዘብ",
+    cashSpent: "የወጣ ገንዘብ",
+    collectionsLabel: "የዱቤ ክፍያ",
+    creditSalesLabel: "ዱቤ ሽያጭ",
+    netCashMovement: "የተጣራ የገንዘብ እንቅስቃሴ",
+    outstandingNow: "አሁን የሚቀረው ዱቤ",
+    advisorTitle: "የንግድ አማካሪ",
+    advisorPositives: "ጥሩ እድገት",
+    advisorProblems: "ሊጠበቁ የሚገቡ",
+    advisorActions: "የሚመከሩ እርምጃዎች",
     creditsRemaining: "AI ክሬዲት",
     rangeToday: "ዛሬ",
     rangeWeek: "ባለፉት 7 ቀናት",
@@ -240,6 +264,18 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     tillTitle: "Galii akkamitti seene",
     tillHint: "Maallaqni fi Telebirr suuqii keessa jiru. Liqaan amma hin kaffalamne.",
     tillEmpty: "Yeroo kana karaa kanaan galii hin galmaa'in.",
+    cashPositionTitle: "Haala maallaqaa",
+    cashPositionHint: "Gurgurtaa liqaa galii dha, maallaqa suuqii keessa jiru miti. Kaffaltiin maamila suuqii seena, gurgurtaa haaraa miti.",
+    cashCollected: "Maallaqa walitti qabame",
+    cashSpent: "Maallaqa bahu",
+    collectionsLabel: "Kaffaltii liqaa",
+    creditSalesLabel: "Gurgurtaa liqaa",
+    netCashMovement: "Sochii maallaqaa qulqulluu",
+    outstandingNow: "Liqaa amma hafaa",
+    advisorTitle: "Gorsaa daldalaa",
+    advisorPositives: "Guddina gaarii",
+    advisorProblems: "Kan eegamuu qabu",
+    advisorActions: "Tarkaanfii gorfamaa",
     creditsRemaining: "AI kirediitii",
     rangeToday: "Har'a",
     rangeWeek: "Guyyoota 7 Darban",
@@ -356,6 +392,18 @@ export const TRANSLATIONS: Record<LanguageCode, UiDictionary> = {
     tillTitle: "How money came in",
     tillHint: "Cash and Telebirr are in the shop. Credit sales are still owed.",
     tillEmpty: "No income recorded this way in this period.",
+    cashPositionTitle: "Cash position",
+    cashPositionHint: "A credit sale is income, not money in the shop. A customer payment is cash in, not a new sale.",
+    cashCollected: "Cash collected",
+    cashSpent: "Cash spent",
+    collectionsLabel: "Debt collections",
+    creditSalesLabel: "Credit sales",
+    netCashMovement: "Net cash movement",
+    outstandingNow: "Still owed to you",
+    advisorTitle: "Business advisor",
+    advisorPositives: "Going well",
+    advisorProblems: "Watch these",
+    advisorActions: "Recommended actions",
     creditsRemaining: "AI credits",
     rangeToday: "Today",
     rangeWeek: "Last 7 Days",

@@ -221,6 +221,8 @@ export function VisionCapture({
     queryClient.invalidateQueries({ queryKey: ["products"] });
     queryClient.invalidateQueries({ queryKey: ["customers"] });
     queryClient.invalidateQueries({ queryKey: ["insights"] });
+    queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
+    queryClient.invalidateQueries({ queryKey: ["advisor"] });
   };
 
   const saleMutation = useMutation({

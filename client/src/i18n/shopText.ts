@@ -47,6 +47,8 @@ export interface ShopText {
   scanProduct: string;
   priceHistory: string;
   addPhoto: string;
+  daysLeft: string;
+  coverUncertain: string;
 }
 
 const en: ShopText = {
@@ -96,6 +98,8 @@ const en: ShopText = {
   scanProduct: "Scan product",
   priceHistory: "Price history",
   addPhoto: "Product photo",
+  daysLeft: "days of stock",
+  coverUncertain: "estimate — more sales needed",
 };
 
 const am: ShopText = {
@@ -145,6 +149,8 @@ const am: ShopText = {
   scanProduct: "እቃ ስካን",
   priceHistory: "የዋጋ ታሪክ",
   addPhoto: "የእቃ ፎቶ",
+  daysLeft: "የቀሩ ቀናት ክምችት",
+  coverUncertain: "ግምት — ተጨማሪ ሽያጭ ያስፈልጋል",
 };
 
 const om: ShopText = {
@@ -194,6 +200,8 @@ const om: ShopText = {
   scanProduct: "Meeshaa scan godhi",
   priceHistory: "Seenaa gatii",
   addPhoto: "Suuraa meeshaa",
+  daysLeft: "guyyaa kuufamaa",
+  coverUncertain: "tilmaama — gurgurtaa dabalataa barbaachisa",
 };
 
 export const SHOP_TEXT: Record<LanguageCode, ShopText> = { am, om, en };
