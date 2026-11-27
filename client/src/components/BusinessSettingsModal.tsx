@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { BusinessCategory, LanguageCode } from "@mizan/shared";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { CUSTOMERS_INTEL_TEXT } from "../i18n/customersText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 
 const BUSINESS_CATEGORIES: BusinessCategory[] = [
@@ -17,7 +18,8 @@ const BUSINESS_CATEGORIES: BusinessCategory[] = [
 
 export function BusinessSettingsModal({ onClose }: { onClose: () => void }) {
   const { business, updateBusiness } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const intel = CUSTOMERS_INTEL_TEXT[language];
 
   const [name, setName] = useState(business?.name ?? "");
   const [category, setCategory] = useState<BusinessCategory>(
@@ -26,6 +28,10 @@ export function BusinessSettingsModal({ onClose }: { onClose: () => void }) {
   const [location, setLocation] = useState(business?.location ?? "");
   const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(
     business?.preferredLanguage ?? "am"
+  );
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(business?.loyaltyEnabled ?? true);
+  const [loyaltyEtbPerPoint, setLoyaltyEtbPerPoint] = useState(
+    String(business?.loyaltyEtbPerPoint ?? 100)
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +46,8 @@ export function BusinessSettingsModal({ onClose }: { onClose: () => void }) {
         category,
         location: location.trim() || null,
         preferredLanguage,
+        loyaltyEnabled,
+        loyaltyEtbPerPoint: Number(loyaltyEtbPerPoint),
       });
       onClose();
     } catch (err) {
@@ -124,6 +132,28 @@ export function BusinessSettingsModal({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           </div>
+
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={loyaltyEnabled}
+              onChange={(e) => setLoyaltyEnabled(e.target.checked)}
+            />
+            {intel.loyaltyEnabled}
+          </label>
+          {loyaltyEnabled && (
+            <div>
+              <label className="block text-xs font-medium text-slate-700">{intel.loyaltyRule}</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={loyaltyEtbPerPoint}
+                onChange={(e) => setLoyaltyEtbPerPoint(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-600 focus:outline-none"
+              />
+            </div>
+          )}
 
           {error && (
             <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">

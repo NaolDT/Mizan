@@ -84,3 +84,14 @@ export function countEatDaysBetween(from: Date, to: Date = new Date()): number {
   const end = Date.parse(`${formatEatDateKey(to)}T00:00:00+03:00`);
   return Math.max(0, Math.floor((end - start) / (24 * 60 * 60 * 1000)));
 }
+
+/** Inclusive start of the last `days` EAT calendar days, including today. */
+export function getEatRollingStartUtc(days: number, now: Date = new Date()): Date {
+  const eatNow = new Date(now.getTime() + EAT_OFFSET_MS);
+  const year = eatNow.getUTCFullYear();
+  const month = eatNow.getUTCMonth();
+  const day = eatNow.getUTCDate();
+  const startOfTodayEatMs = Date.UTC(year, month, day, 0, 0, 0, 0) - EAT_OFFSET_MS;
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  return new Date(startOfTodayEatMs - Math.max(0, days - 1) * oneDayMs);
+}

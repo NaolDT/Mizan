@@ -9,6 +9,9 @@ import type {
 } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
+import { formatEatDateKey, getEatRollingStartUtc } from "../../utils/eatDate.js";
+import { eatDaysBetween, segmentCustomer } from "./customer.intel.math.js";
+import { listLoyalty } from "./loyalty.service.js";
 
 export function toNameKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -26,7 +29,29 @@ export async function getCustomerBalance(customerId: string): Promise<Prisma.Dec
   return result._sum.amount ?? new Prisma.Decimal(0);
 }
 
-function mapCustomerDto(customer: Customer, balance: Prisma.Decimal): CustomerDto {
+type CustomerInsight = {
+  lifetimeSpend: Prisma.Decimal;
+  saleCount: number;
+  lastPurchaseAt: Date | null;
+  loyaltyPoints: number;
+  recentSaleCount: number;
+};
+
+const EMPTY_INSIGHT: CustomerInsight = {
+  lifetimeSpend: new Prisma.Decimal(0),
+  saleCount: 0,
+  lastPurchaseAt: null,
+  loyaltyPoints: 0,
+  recentSaleCount: 0,
+};
+
+function mapCustomerDto(
+  customer: Customer,
+  balance: Prisma.Decimal,
+  insight: CustomerInsight = EMPTY_INSIGHT
+): CustomerDto {
+  const nowKey = formatEatDateKey();
+  const lastKey = insight.lastPurchaseAt ? formatEatDateKey(insight.lastPurchaseAt) : null;
   return {
     id: customer.id,
     businessId: customer.businessId,
@@ -34,8 +59,77 @@ function mapCustomerDto(customer: Customer, balance: Prisma.Decimal): CustomerDt
     phone: customer.phone,
     notes: customer.notes,
     outstandingBalance: toNumber2(balance),
+    lifetimeSpend: toNumber2(insight.lifetimeSpend),
+    saleCount: insight.saleCount,
+    lastPurchaseAt: insight.lastPurchaseAt?.toISOString() ?? null,
+    loyaltyPoints: insight.loyaltyPoints,
+    segment: segmentCustomer({
+      outstanding: balance,
+      saleCount: insight.saleCount,
+      daysSinceLastPurchase: lastKey ? eatDaysBetween(lastKey, nowKey) : null,
+      recentSaleCount: insight.recentSaleCount,
+    }),
     createdAt: customer.createdAt.toISOString(),
   };
+}
+
+async function loadInsights(businessId: string, customerIds: string[]): Promise<Map<string, CustomerInsight>> {
+  const insights = new Map<string, CustomerInsight>();
+  for (const id of customerIds) insights.set(id, { ...EMPTY_INSIGHT });
+  if (customerIds.length === 0) return insights;
+
+  const recentStart = getEatRollingStartUtc(30);
+  const [spendRows, recentRows, loyaltyRows] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ["customerId"],
+      where: {
+        businessId,
+        status: "COMPLETED",
+        type: "INCOME",
+        customerId: { in: customerIds },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+      _max: { transactionDate: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ["customerId"],
+      where: {
+        businessId,
+        status: "COMPLETED",
+        type: "INCOME",
+        customerId: { in: customerIds },
+        transactionDate: { gte: recentStart },
+      },
+      _count: { _all: true },
+    }),
+    prisma.shopLoyaltyLedger.groupBy({
+      by: ["customerId"],
+      where: { businessId, customerId: { in: customerIds } },
+      _sum: { points: true },
+    }),
+  ]);
+
+  for (const row of spendRows) {
+    if (!row.customerId) continue;
+    const current = insights.get(row.customerId) ?? { ...EMPTY_INSIGHT };
+    current.lifetimeSpend = row._sum.amount ?? new Prisma.Decimal(0);
+    current.saleCount = row._count._all;
+    current.lastPurchaseAt = row._max.transactionDate;
+    insights.set(row.customerId, current);
+  }
+  for (const row of recentRows) {
+    if (!row.customerId) continue;
+    const current = insights.get(row.customerId) ?? { ...EMPTY_INSIGHT };
+    current.recentSaleCount = row._count._all;
+    insights.set(row.customerId, current);
+  }
+  for (const row of loyaltyRows) {
+    const current = insights.get(row.customerId) ?? { ...EMPTY_INSIGHT };
+    current.loyaltyPoints = row._sum.points ?? 0;
+    insights.set(row.customerId, current);
+  }
+  return insights;
 }
 
 export async function listCustomers(businessId: string): Promise<CustomerDto[]> {
@@ -43,8 +137,16 @@ export async function listCustomers(businessId: string): Promise<CustomerDto[]> 
     where: { businessId },
     orderBy: { name: "asc" },
   });
-  const balances = await Promise.all(rows.map((row) => getCustomerBalance(row.id)));
-  return rows.map((row, index) => mapCustomerDto(row, balances[index]));
+  const [balances, insights] = await Promise.all([
+    Promise.all(rows.map((row) => getCustomerBalance(row.id))),
+    loadInsights(
+      businessId,
+      rows.map((row) => row.id)
+    ),
+  ]);
+  return rows.map((row, index) =>
+    mapCustomerDto(row, balances[index], insights.get(row.id) ?? EMPTY_INSIGHT)
+  );
 }
 
 export async function getCustomer(
@@ -56,13 +158,25 @@ export async function getCustomer(
   });
   if (!customer) throw new AppError(404, "CUSTOMER_NOT_FOUND", "Customer not found");
 
-  const [balance, ledger] = await Promise.all([
+  const [balance, ledger, purchases, loyalty, insights] = await Promise.all([
     getCustomerBalance(customer.id),
     prisma.customerLedger.findMany({
       where: { customerId: customer.id, businessId },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    prisma.transaction.findMany({
+      where: {
+        businessId,
+        customerId: customer.id,
+        type: "INCOME",
+        status: "COMPLETED",
+      },
+      orderBy: { transactionDate: "desc" },
+      take: 25,
+    }),
+    listLoyalty(businessId, customer.id),
+    loadInsights(businessId, [customer.id]),
   ]);
 
   const ledgerDto: CustomerLedgerEntryDto[] = ledger.map((entry) => ({
@@ -73,7 +187,18 @@ export async function getCustomer(
     createdAt: entry.createdAt.toISOString(),
   }));
 
-  return { ...mapCustomerDto(customer, balance), ledger: ledgerDto };
+  return {
+    ...mapCustomerDto(customer, balance, insights.get(customer.id) ?? EMPTY_INSIGHT),
+    ledger: ledgerDto,
+    purchases: purchases.map((row) => ({
+      id: row.id,
+      amount: toNumber2(row.amount),
+      description: row.description,
+      paymentMethod: row.paymentMethod,
+      transactionDate: row.transactionDate.toISOString(),
+    })),
+    loyalty,
+  };
 }
 
 export async function createCustomer(
@@ -151,7 +276,11 @@ export async function updateCustomer(
       ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
     },
   });
-  return mapCustomerDto(updated, await getCustomerBalance(updated.id));
+  const [balance, insights] = await Promise.all([
+    getCustomerBalance(updated.id),
+    loadInsights(businessId, [updated.id]),
+  ]);
+  return mapCustomerDto(updated, balance, insights.get(updated.id) ?? EMPTY_INSIGHT);
 }
 
 export async function recordCreditSaleForCustomer(

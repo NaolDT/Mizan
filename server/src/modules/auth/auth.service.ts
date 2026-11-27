@@ -57,6 +57,8 @@ export function mapBusinessDto(business: Business): BusinessDto {
     currency: "ETB",
     preferredLanguage: business.preferredLanguage,
     plan: business.plan,
+    loyaltyEnabled: business.loyaltyEnabled,
+    loyaltyEtbPerPoint: Number(business.loyaltyEtbPerPoint.toFixed(2)),
     createdAt: business.createdAt.toISOString(),
   };
 }

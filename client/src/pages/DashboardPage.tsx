@@ -44,6 +44,7 @@ import { CashPositionPanel } from "../components/CashPositionPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
 import { NoticesPanel } from "../components/NoticesPanel";
 import { InventoryPanel } from "../components/InventoryPanel";
+import { PosPanel } from "../components/PosPanel";
 import { PurchasesPanel } from "../components/PurchasesPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { WalletPanel } from "../components/WalletPanel";
@@ -52,6 +53,7 @@ import type { VisionWorkflow } from "@mizan/shared";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { useWallet } from "../hooks/useWallet";
 import { BILLING_TEXT } from "../i18n/billingText";
+import { POS_TEXT } from "../i18n/posText";
 import { PURCHASES_TEXT } from "../i18n/purchasesText";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
@@ -69,10 +71,18 @@ export function DashboardPage() {
   const [searchParams] = useSearchParams();
   const billingReturn = searchParams.get("billing");
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "ledger" | "inventory" | "customers" | "purchases" | "rewards" | "credits"
+    | "dashboard"
+    | "ledger"
+    | "sell"
+    | "inventory"
+    | "customers"
+    | "purchases"
+    | "rewards"
+    | "credits"
   >(billingReturn === "return" || billingReturn === "dev" ? "credits" : "dashboard");
   const refreshBilling = useRefreshBilling();
   const wallet = useWallet();
+  const posText = POS_TEXT[language];
   const purchasesText = PURCHASES_TEXT[language];
   const rewardsText = REWARDS_TEXT[language];
   const billingText = BILLING_TEXT[language];
@@ -237,6 +247,17 @@ export function DashboardPage() {
                   }`}
                 >
                   {t.ledgerTab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("sell")}
+                  className={`font-semibold ${
+                    activeTab === "sell"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {posText.tab}
                 </button>
                 <button
                   type="button"
@@ -640,6 +661,7 @@ export function DashboardPage() {
 
         {activeTab === "rewards" && <RewardsPanel />}
         {activeTab === "credits" && <WalletPanel />}
+        {activeTab === "sell" && <PosPanel />}
         {activeTab === "inventory" && (
           <InventoryPanel
             onScanProduct={() => {
@@ -656,7 +678,8 @@ export function DashboardPage() {
           activeTab !== "credits" &&
           activeTab !== "inventory" &&
           activeTab !== "customers" &&
-          activeTab !== "purchases" && (
+          activeTab !== "purchases" &&
+          activeTab !== "sell" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-900">

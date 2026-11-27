@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { BusinessDto, UpdateBusinessRequest } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../utils/apiResponse.js";
@@ -42,6 +43,10 @@ export async function updateBusinessProfile(
           : {}),
         ...(input.preferredLanguage !== undefined
           ? { preferredLanguage: input.preferredLanguage }
+          : {}),
+        ...(input.loyaltyEnabled !== undefined ? { loyaltyEnabled: input.loyaltyEnabled } : {}),
+        ...(input.loyaltyEtbPerPoint !== undefined
+          ? { loyaltyEtbPerPoint: new Prisma.Decimal(input.loyaltyEtbPerPoint.toFixed(2)) }
           : {}),
       },
     });

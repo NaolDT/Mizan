@@ -132,6 +132,12 @@ enum SupplierLedgerType {
   REVERSAL
 }
 
+enum ShopLoyaltyType {
+  EARN
+  REDEEM
+  REVERSAL
+}
+
 model User {
   id                String           @id @default(uuid()) @db.Uuid
   name              String           @db.VarChar(120)
@@ -167,6 +173,8 @@ model Business {
   currency          String           @default("ETB") @db.VarChar(3)
   preferredLanguage LanguageCode     @default(am) @map("preferred_language")
   plan              SubscriptionPlan @default(FREE)
+  loyaltyEnabled    Boolean          @default(true) @map("loyalty_enabled")
+  loyaltyEtbPerPoint Decimal         @default(100) @map("loyalty_etb_per_point") @db.Decimal(12, 2)
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -199,6 +207,7 @@ model Business {
   purchaseOrders        PurchaseOrder[]
   purchaseOrderItems    PurchaseOrderItem[]
   supplierLedger        SupplierLedger[]
+  shopLoyalty           ShopLoyaltyLedger[]
 
   @@index([ownerId])
   @@map("businesses")
@@ -331,6 +340,7 @@ model Customer {
   business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   ledger      CustomerLedger[]
+  loyalty     ShopLoyaltyLedger[]
 
   @@unique([businessId, nameKey])
   @@index([businessId, createdAt(sort: Desc)])
@@ -356,6 +366,26 @@ model CustomerLedger {
   @@index([customerId, createdAt(sort: Desc)])
   @@index([businessId, type])
   @@map("customer_ledger")
+}
+
+model ShopLoyaltyLedger {
+  id            String          @id @default(uuid()) @db.Uuid
+  businessId    String          @map("business_id") @db.Uuid
+  customerId    String          @map("customer_id") @db.Uuid
+  type          ShopLoyaltyType
+  points        Int
+  note          String?         @db.VarChar(200)
+  sourceKey     String          @map("source_key") @db.VarChar(80)
+  transactionId String?         @map("transaction_id") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, sourceKey])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([businessId, type])
+  @@map("shop_loyalty_ledger")
 }
 
 model Product {

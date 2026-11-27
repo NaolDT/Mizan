@@ -10,6 +10,7 @@ import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { customersRouter } from "./modules/customers/customers.routes.js";
 import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
 import { purchasesRouter } from "./modules/purchases/purchases.routes.js";
+import { salesRouter } from "./modules/sales/sales.routes.js";
 import { suppliersRouter } from "./modules/purchases/suppliers.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { businessRouter } from "./modules/business/business.routes.js";
@@ -88,6 +89,7 @@ export function createApp() {
   app.use("/api/v1/inventory", inventoryRouter);
   app.use("/api/v1/suppliers", suppliersRouter);
   app.use("/api/v1/purchases", purchasesRouter);
+  app.use("/api/v1/sales", salesRouter);
   app.use("/api/v1/vision", visionRouter);
   app.use("/api/v1/billing/admin", billingAdminRouter);
   app.use("/api/v1/billing", billingRouter);

@@ -5,10 +5,13 @@ import type {
   CreateCustomerRequest,
   CustomerDetailDto,
   CustomerDto,
+  CustomerSegment,
   RecordCustomerPaymentRequest,
+  RedeemShopLoyaltyRequest,
   UpdateCustomerRequest,
 } from "@mizan/shared";
 import { useLanguage } from "../context/LanguageContext";
+import { CUSTOMERS_INTEL_TEXT } from "../i18n/customersText";
 import { SHOP_TEXT } from "../i18n/shopText";
 import { apiRequest } from "../lib/api";
 import { formatEtb, formatShortDate } from "../lib/format";
@@ -16,15 +19,18 @@ import { formatEtb, formatShortDate } from "../lib/format";
 export function CustomersPanel() {
   const { language } = useLanguage();
   const text = SHOP_TEXT[language];
+  const intel = CUSTOMERS_INTEL_TEXT[language];
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<CustomerDto | null>(null);
   const [search, setSearch] = useState("");
+  const [segmentFilter, setSegmentFilter] = useState<CustomerSegment | "ALL">("ALL");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [redeemPoints, setRedeemPoints] = useState("");
 
   const listQuery = useQuery({
     queryKey: ["customers"],
@@ -111,7 +117,21 @@ export function CustomersPanel() {
     },
   });
 
+  const redeemMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: RedeemShopLoyaltyRequest }) =>
+      apiRequest<CustomerDetailDto>(`/customers/${id}/loyalty/redeem`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
+      setRedeemPoints("");
+    },
+  });
+
   const customers = (listQuery.data ?? []).filter((customer) => {
+    if (segmentFilter !== "ALL" && customer.segment !== segmentFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -145,6 +165,20 @@ export function CustomersPanel() {
           placeholder={text.search}
           className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
         />
+        <div className="flex flex-wrap gap-1">
+          {(["ALL", "OWING", "FREQUENT", "INACTIVE", "NEW"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSegmentFilter(key)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                segmentFilter === key ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {key === "ALL" ? intel.filterAll : intel.segment[key]}
+            </button>
+          ))}
+        </div>
 
         {showForm && (
           <form
@@ -208,7 +242,13 @@ export function CustomersPanel() {
                       : "border-slate-200 bg-white"
                   }`}
                 >
-                  <span className="truncate font-semibold text-slate-900">{customer.name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-slate-900">{customer.name}</span>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      {intel.segment[customer.segment]}
+                      {customer.loyaltyPoints > 0 ? ` · ${customer.loyaltyPoints}` : ""}
+                    </span>
+                  </span>
                   <span
                     className={`ml-2 shrink-0 text-xs font-bold ${
                       customer.outstandingBalance > 0 ? "text-amber-700" : "text-slate-500"
@@ -216,7 +256,7 @@ export function CustomersPanel() {
                   >
                     {customer.outstandingBalance > 0
                       ? formatEtb(customer.outstandingBalance)
-                      : text.settled}
+                      : formatEtb(customer.lifetimeSpend)}
                   </span>
                 </button>
                 <button
@@ -256,10 +296,27 @@ export function CustomersPanel() {
             <h3 className="text-lg font-bold text-slate-900">{detail.name}</h3>
             {detail.phone && <p className="text-xs text-slate-500">{detail.phone}</p>}
             {detail.notes && <p className="mt-1 text-xs text-slate-500">{detail.notes}</p>}
+            <p className="mt-2 text-xs font-semibold text-emerald-800">{intel.segment[detail.segment]}</p>
             <p className="mt-3 text-2xl font-bold text-amber-800">
               {formatEtb(detail.outstandingBalance)}
             </p>
             <p className="text-xs text-slate-500">{text.owes}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-slate-500">{intel.spend}</p>
+                <p className="font-bold text-slate-900">{formatEtb(detail.lifetimeSpend)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-slate-500">{intel.points}</p>
+                <p className="font-bold text-slate-900">{detail.loyaltyPoints}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              {detail.lastPurchaseAt
+                ? `${intel.lastBuy}: ${formatShortDate(detail.lastPurchaseAt)}`
+                : intel.neverBought}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-400">{intel.redeemHint}</p>
 
             {detail.outstandingBalance > 0 && (
               <form
@@ -299,6 +356,59 @@ export function CustomersPanel() {
               <p className="mt-2 text-xs text-rose-600">
                 {payMutation.error instanceof Error ? payMutation.error.message : "Error"}
               </p>
+            )}
+
+            {detail.loyaltyPoints > 0 && (
+              <form
+                className="mt-3 flex flex-wrap gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const points = Number(redeemPoints);
+                  if (!points) return;
+                  redeemMutation.mutate({
+                    id: detail.id,
+                    body: { points, idempotencyKey: crypto.randomUUID() },
+                  });
+                }}
+              >
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={redeemPoints}
+                  onChange={(e) => setRedeemPoints(e.target.value)}
+                  placeholder={intel.points}
+                  className="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={redeemMutation.isPending}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
+                >
+                  {intel.redeem}
+                </button>
+              </form>
+            )}
+            {redeemMutation.error && (
+              <p className="mt-2 text-xs text-rose-600">
+                {redeemMutation.error instanceof Error ? redeemMutation.error.message : "Error"}
+              </p>
+            )}
+
+            {detail.purchases.length > 0 && (
+              <>
+                <h4 className="mt-6 text-sm font-bold text-slate-800">{intel.purchases}</h4>
+                <ul className="mt-2 divide-y divide-slate-100">
+                  {detail.purchases.slice(0, 8).map((row) => (
+                    <li key={row.id} className="flex items-center justify-between py-2 text-xs">
+                      <span className="text-slate-600">
+                        {row.description} · {formatShortDate(row.transactionDate)}
+                      </span>
+                      <span className="font-bold text-slate-900">{formatEtb(row.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
 
             <h4 className="mt-6 text-sm font-bold text-slate-800">{text.history}</h4>

@@ -11,6 +11,7 @@ import {
   recordCustomerPayment,
   updateCustomer,
 } from "./customers.service.js";
+import { redeemLoyalty } from "./loyalty.service.js";
 
 export const customersRouter = Router();
 
@@ -78,6 +79,22 @@ customersRouter.post("/:id/payments", async (req, res, next) => {
   try {
     const body = paymentSchema.parse(req.body);
     sendSuccess(res, await recordCustomerPayment(req.tenant!.businessId, req.params.id, body));
+  } catch (err) {
+    next(err);
+  }
+});
+
+const redeemSchema = z.object({
+  points: z.number().int().positive(),
+  note: z.string().max(200).optional(),
+  idempotencyKey: z.string().min(4).max(80),
+});
+
+customersRouter.post("/:id/loyalty/redeem", async (req, res, next) => {
+  try {
+    const body = redeemSchema.parse(req.body);
+    await redeemLoyalty(req.tenant!.businessId, req.params.id, body);
+    sendSuccess(res, await getCustomer(req.tenant!.businessId, req.params.id));
   } catch (err) {
     next(err);
   }

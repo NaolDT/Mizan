@@ -24,6 +24,8 @@ const updateBusinessSchema = z.object({
     .optional(),
   location: z.string().max(140).nullable().optional(),
   preferredLanguage: z.enum(["am", "om", "en"]).optional(),
+  loyaltyEnabled: z.boolean().optional(),
+  loyaltyEtbPerPoint: z.number().positive().max(1_000_000).optional(),
 });
 
 businessRouter.get("/current", async (req, res, next) => {

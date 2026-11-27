@@ -77,6 +77,10 @@ export type PurchaseOrderStatus = "ORDERED" | "PARTIAL" | "RECEIVED" | "CANCELLE
 
 export type SupplierLedgerType = "PURCHASE" | "PAYMENT" | "REVERSAL";
 
+export type ShopLoyaltyType = "EARN" | "REDEEM" | "REVERSAL";
+
+export type CustomerSegment = "NEW" | "REGULAR" | "FREQUENT" | "INACTIVE" | "OWING";
+
 export type InsightSeverity = "info" | "warning";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +126,8 @@ export interface BusinessDto {
   currency: "ETB";
   preferredLanguage: LanguageCode;
   plan: SubscriptionPlan;
+  loyaltyEnabled: boolean;
+  loyaltyEtbPerPoint: number;
   createdAt: string;
 }
 
@@ -153,6 +159,8 @@ export interface UpdateBusinessRequest {
   category?: BusinessCategory;
   location?: string | null;
   preferredLanguage?: LanguageCode;
+  loyaltyEnabled?: boolean;
+  loyaltyEtbPerPoint?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -496,6 +504,11 @@ export interface CustomerDto {
   phone: string | null;
   notes: string | null;
   outstandingBalance: number;
+  lifetimeSpend: number;
+  saleCount: number;
+  lastPurchaseAt: string | null;
+  loyaltyPoints: number;
+  segment: CustomerSegment;
   createdAt: string;
 }
 
@@ -507,8 +520,53 @@ export interface CustomerLedgerEntryDto {
   createdAt: string;
 }
 
+export interface CustomerPurchaseDto {
+  id: string;
+  amount: number;
+  description: string;
+  paymentMethod: PaymentMethod;
+  transactionDate: string;
+}
+
+export interface ShopLoyaltyEntryDto {
+  id: string;
+  type: ShopLoyaltyType;
+  points: number;
+  note: string | null;
+  createdAt: string;
+}
+
 export interface CustomerDetailDto extends CustomerDto {
   ledger: CustomerLedgerEntryDto[];
+  purchases: CustomerPurchaseDto[];
+  loyalty: ShopLoyaltyEntryDto[];
+}
+
+export interface RedeemShopLoyaltyRequest {
+  points: number;
+  note?: string;
+  idempotencyKey: string;
+}
+
+export interface CheckoutSaleLine {
+  productId: string;
+  quantity: number;
+}
+
+export interface CheckoutSaleRequest {
+  idempotencyKey: string;
+  paymentMethod?: PaymentMethod;
+  customerId?: string | null;
+  counterpartyName?: string | null;
+  discountAmount?: number;
+  lines: CheckoutSaleLine[];
+}
+
+export interface CheckoutSaleResponse {
+  transactions: TransactionDto[];
+  subtotal: number;
+  discountAmount: number;
+  total: number;
 }
 
 export interface CreateCustomerRequest {

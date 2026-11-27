@@ -17,6 +17,10 @@ import {
   reverseCreditSaleForTransaction,
 } from "../customers/customers.service.js";
 import {
+  earnLoyaltyForSale,
+  reverseLoyaltyForTransaction,
+} from "../customers/loyalty.service.js";
+import {
   adjustStock,
   reverseStockForTransaction,
 } from "../inventory/inventory.service.js";
@@ -263,6 +267,14 @@ export async function createTransaction(
     );
   }
 
+  if (
+    created.type === "INCOME" &&
+    created.customerId &&
+    (created.category === "SALES" || created.category === "SERVICE_INCOME")
+  ) {
+    await earnLoyaltyForSale(businessId, created.customerId, created.id, created.amount);
+  }
+
   if (created.productId && qty && !qty.eq(0)) {
     const reason = created.type === "EXPENSE" ? "RESTOCK" : "SALE";
     const delta = reason === "RESTOCK" ? Number(qty.toFixed(2)) : -Number(qty.toFixed(2));
@@ -356,6 +368,7 @@ export async function voidTransaction(
   if (existing.paymentMethod === "CREDIT") {
     await reverseCreditSaleForTransaction(businessId, existing.id);
   }
+  await reverseLoyaltyForTransaction(businessId, existing.id);
   await reverseStockForTransaction(businessId, existing.id, existing.recordedById);
 
   return mapTransactionDto(voided);
