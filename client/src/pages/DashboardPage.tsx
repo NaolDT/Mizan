@@ -44,6 +44,7 @@ import { CashPositionPanel } from "../components/CashPositionPanel";
 import { InsightsStrip } from "../components/InsightsStrip";
 import { NoticesPanel } from "../components/NoticesPanel";
 import { InventoryPanel } from "../components/InventoryPanel";
+import { PurchasesPanel } from "../components/PurchasesPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { WalletPanel } from "../components/WalletPanel";
 import { VisionCapture } from "../components/VisionCapture";
@@ -51,6 +52,7 @@ import type { VisionWorkflow } from "@mizan/shared";
 import { useRefreshBilling } from "../hooks/useBilling";
 import { useWallet } from "../hooks/useWallet";
 import { BILLING_TEXT } from "../i18n/billingText";
+import { PURCHASES_TEXT } from "../i18n/purchasesText";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 import { apiRequest, downloadCsv } from "../lib/api";
@@ -67,10 +69,11 @@ export function DashboardPage() {
   const [searchParams] = useSearchParams();
   const billingReturn = searchParams.get("billing");
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "ledger" | "inventory" | "customers" | "rewards" | "credits"
+    "dashboard" | "ledger" | "inventory" | "customers" | "purchases" | "rewards" | "credits"
   >(billingReturn === "return" || billingReturn === "dev" ? "credits" : "dashboard");
   const refreshBilling = useRefreshBilling();
   const wallet = useWallet();
+  const purchasesText = PURCHASES_TEXT[language];
   const rewardsText = REWARDS_TEXT[language];
   const billingText = BILLING_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
@@ -130,6 +133,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
@@ -156,6 +161,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
@@ -174,6 +181,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["cash-flow"] });
       queryClient.invalidateQueries({ queryKey: ["advisor"] });
@@ -250,6 +259,17 @@ export function DashboardPage() {
                   }`}
                 >
                   {t.customersTab}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("purchases")}
+                  className={`font-semibold ${
+                    activeTab === "purchases"
+                      ? "text-emerald-700 underline underline-offset-4"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {purchasesText.tab}
                 </button>
                 <button
                   type="button"
@@ -629,12 +649,14 @@ export function DashboardPage() {
           />
         )}
         {activeTab === "customers" && <CustomersPanel />}
+        {activeTab === "purchases" && <PurchasesPanel />}
 
         {/* Transactions Feed / Ledger */}
         {activeTab !== "rewards" &&
           activeTab !== "credits" &&
           activeTab !== "inventory" &&
-          activeTab !== "customers" && (
+          activeTab !== "customers" &&
+          activeTab !== "purchases" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-900">

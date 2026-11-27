@@ -96,3 +96,26 @@ test("credit purchases do not reduce cash, digital outflows do", () => {
   assert.equal(serialized.collectedIn, 500);
   assert.equal(serialized.netCashMovement, 420);
 });
+
+test("paying a supplier reduces cash without a second expense", () => {
+  const { totals, dailySeries } = accumulateCashFlow({
+    transactions: [
+      {
+        type: "EXPENSE",
+        paymentMethod: "CREDIT",
+        amount: d("300.00"),
+        transactionDate: new Date("2026-11-20T08:00:00Z"),
+      },
+    ],
+    collections: [],
+    supplierPayments: [{ amount: d("-120.00"), createdAt: new Date("2026-11-24T11:00:00Z") }],
+    dateKeys: ["2026-11-24"],
+    formatDateKey: dateKey,
+  });
+
+  const serialized = serializeCashTotals(totals);
+  assert.equal(serialized.creditPurchases, 300);
+  assert.equal(serialized.spent, 120);
+  assert.equal(serialized.netCashMovement, -120);
+  assert.equal(dailySeries[0]?.spent, 120);
+});

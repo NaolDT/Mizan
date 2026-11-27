@@ -119,6 +119,19 @@ enum CustomerLedgerType {
   REVERSAL
 }
 
+enum PurchaseOrderStatus {
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum SupplierLedgerType {
+  PURCHASE
+  PAYMENT
+  REVERSAL
+}
+
 model User {
   id                String           @id @default(uuid()) @db.Uuid
   name              String           @db.VarChar(120)
@@ -140,6 +153,7 @@ model User {
   rewardEntries     RewardLedger[]
   stockMovements    StockMovement[]
   priceChanges      ProductPriceHistory[]
+  purchaseOrders    PurchaseOrder[]
 
   @@map("users")
 }
@@ -181,6 +195,10 @@ model Business {
   billingPayments       BillingPayment[]
   billingNotices        BillingNotice[]
   businessNotices       BusinessNotice[]
+  suppliers             Supplier[]
+  purchaseOrders        PurchaseOrder[]
+  purchaseOrderItems    PurchaseOrderItem[]
+  supplierLedger        SupplierLedger[]
 
   @@index([ownerId])
   @@map("businesses")
@@ -211,6 +229,8 @@ model Transaction {
   recordedBy       User                @relation(fields: [recordedById], references: [id], onDelete: Restrict)
   customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
   product          Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  purchaseOrder    PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  purchaseOrderId  String?             @map("purchase_order_id") @db.Uuid
   linkedMessages   AiMessage[]
   stockMovements   StockMovement[]
   customerLedger   CustomerLedger[]
@@ -362,6 +382,7 @@ model Product {
   business           Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   movements          StockMovement[]
   transactions       Transaction[]
+  purchaseOrderItems PurchaseOrderItem[]
   priceHistory       ProductPriceHistory[]
   recognitionHints   ProductRecognitionHint[]
 
@@ -671,6 +692,90 @@ model BillingNotice {
 
   @@index([businessId, createdAt(sort: Desc)])
   @@map("billing_notices")
+}
+
+model Supplier {
+  id          String           @id @default(uuid()) @db.Uuid
+  businessId  String           @map("business_id") @db.Uuid
+  name        String           @db.VarChar(120)
+  nameKey     String           @map("name_key") @db.VarChar(120)
+  phone       String?          @db.VarChar(24)
+  notes       String?          @db.VarChar(280)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders      PurchaseOrder[]
+  ledger      SupplierLedger[]
+
+  @@unique([businessId, nameKey])
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id             String              @id @default(uuid()) @db.Uuid
+  businessId     String              @map("business_id") @db.Uuid
+  supplierId     String              @map("supplier_id") @db.Uuid
+  recordedById   String              @map("recorded_by_id") @db.Uuid
+  status         PurchaseOrderStatus @default(ORDERED)
+  notes          String?             @db.VarChar(280)
+  idempotencyKey String              @map("idempotency_key") @db.VarChar(80)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business       Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplier       Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  recordedBy     User                @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  items          PurchaseOrderItem[]
+  ledger         SupplierLedger[]
+  transactions   Transaction[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt(sort: Desc)])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                String        @id @default(uuid()) @db.Uuid
+  businessId        String        @map("business_id") @db.Uuid
+  purchaseOrderId   String        @map("purchase_order_id") @db.Uuid
+  productId         String        @map("product_id") @db.Uuid
+  description       String        @db.VarChar(160)
+  quantityOrdered   Decimal       @map("quantity_ordered") @db.Decimal(12, 2)
+  quantityReceived  Decimal       @default(0) @map("quantity_received") @db.Decimal(12, 2)
+  unitCost          Decimal       @map("unit_cost") @db.Decimal(12, 2)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business          Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  purchaseOrder     PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product           Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseOrderId])
+  @@index([businessId, productId])
+  @@map("purchase_order_items")
+}
+
+model SupplierLedger {
+  id              String             @id @default(uuid()) @db.Uuid
+  businessId      String             @map("business_id") @db.Uuid
+  supplierId      String             @map("supplier_id") @db.Uuid
+  type            SupplierLedgerType
+  amount          Decimal            @db.Decimal(12, 2)
+  note            String?            @db.VarChar(200)
+  sourceKey       String?            @map("source_key") @db.VarChar(80)
+  purchaseOrderId String?            @map("purchase_order_id") @db.Uuid
+  transactionId   String?            @map("transaction_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business        Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplier        Supplier           @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, sourceKey])
+  @@index([supplierId, createdAt(sort: Desc)])
+  @@index([businessId, type])
+  @@map("supplier_ledger")
 }
 
 model BusinessNotice {

@@ -37,10 +37,13 @@ function toNumber2(dec: Prisma.Decimal): number {
 /**
  * Credit sales raise revenue, not cash. Customer PAYMENT ledger lines are cash
  * collected against earlier credit sales and must not be counted as new income.
+ * Supplier PAYMENT ledger lines are cash leaving the shop against an earlier
+ * credit purchase and must not be counted as a second expense.
  */
 export function accumulateCashFlow(params: {
   transactions: CashFlowTxRow[];
   collections: CashFlowCollectionRow[];
+  supplierPayments?: CashFlowCollectionRow[];
   dateKeys: string[];
   formatDateKey: (date: Date) => string;
 }): { totals: CashFlowTotals; dailySeries: CashFlowDailyPoint[] } {
@@ -105,8 +108,15 @@ export function accumulateCashFlow(params: {
     bumpDay(params.formatDateKey(row.createdAt), "collected", collected);
   }
 
+  let supplierPaid = ZERO();
+  for (const row of params.supplierPayments ?? []) {
+    const paid = row.amount.abs();
+    supplierPaid = supplierPaid.plus(paid);
+    bumpDay(params.formatDateKey(row.createdAt), "spent", paid);
+  }
+
   totals.collectedIn = totals.cashIn.plus(totals.telebirrIn).plus(totals.bankIn).plus(totals.collections);
-  totals.spent = totals.cashOut.plus(totals.telebirrOut).plus(totals.bankOut);
+  totals.spent = totals.cashOut.plus(totals.telebirrOut).plus(totals.bankOut).plus(supplierPaid);
   totals.netCashMovement = totals.collectedIn.minus(totals.spent);
 
   const dailySeries: CashFlowDailyPoint[] = Array.from(daily.entries())

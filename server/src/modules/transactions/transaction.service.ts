@@ -221,7 +221,12 @@ export async function createTransaction(
   }
 
   let customerId = input.customerId ?? null;
-  if (!customerId && paymentMethod === "CREDIT" && counterpartyName) {
+  if (
+    !customerId &&
+    paymentMethod === "CREDIT" &&
+    counterpartyName &&
+    input.type === "INCOME"
+  ) {
     const customer = await findOrCreateCustomerByName(businessId, counterpartyName);
     customerId = customer.id;
   }
@@ -240,6 +245,7 @@ export async function createTransaction(
       customerId,
       productId: input.productId ?? null,
       quantity: qty,
+      purchaseOrderId: input.purchaseOrderId ?? null,
       transactionDate: parsedDate,
       source: input.source ?? "MANUAL",
       idempotencyKey: normalizedKey,

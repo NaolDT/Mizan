@@ -304,7 +304,7 @@ export async function getCashFlow(
     dateKeys.push(formatEatDateKey(new Date(cursorMs + 12 * 60 * 60 * 1000)));
   }
 
-  const [periodRows, collectionRows, outstanding] = await Promise.all([
+  const [periodRows, collectionRows, supplierPaymentRows, outstanding] = await Promise.all([
     prisma.transaction.findMany({
       where: {
         businessId,
@@ -332,12 +332,24 @@ export async function getCashFlow(
       },
       select: { amount: true, createdAt: true },
     }),
+    prisma.supplierLedger.findMany({
+      where: {
+        businessId,
+        type: "PAYMENT",
+        createdAt: {
+          gte: periodWindow.startUtc,
+          lte: periodWindow.endUtc,
+        },
+      },
+      select: { amount: true, createdAt: true },
+    }),
     outstandingTotals(businessId),
   ]);
 
   const { totals, dailySeries } = accumulateCashFlow({
     transactions: periodRows,
     collections: collectionRows,
+    supplierPayments: supplierPaymentRows,
     dateKeys,
     formatDateKey: formatEatDateKey,
   });

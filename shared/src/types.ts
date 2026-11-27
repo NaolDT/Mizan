@@ -73,6 +73,10 @@ export type StockMovementReason = "RESTOCK" | "SALE" | "ADJUSTMENT";
 
 export type CustomerLedgerType = "CREDIT_SALE" | "PAYMENT" | "REVERSAL";
 
+export type PurchaseOrderStatus = "ORDERED" | "PARTIAL" | "RECEIVED" | "CANCELLED";
+
+export type SupplierLedgerType = "PURCHASE" | "PAYMENT" | "REVERSAL";
+
 export type InsightSeverity = "info" | "warning";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,6 +189,7 @@ export interface CreateTransactionRequest {
   customerId?: string | null;
   productId?: string | null;
   quantity?: number | null;
+  purchaseOrderId?: string | null;
   transactionDate?: string;
   source?: TransactionSource;
   idempotencyKey: string;
@@ -523,6 +528,95 @@ export interface RecordCustomerPaymentRequest {
   paymentMethod?: PaymentMethod;
   note?: string;
   idempotencyKey: string;
+}
+
+export interface SupplierDto {
+  id: string;
+  businessId: string;
+  name: string;
+  phone: string | null;
+  notes: string | null;
+  outstandingBalance: number;
+  createdAt: string;
+}
+
+export interface SupplierLedgerEntryDto {
+  id: string;
+  type: SupplierLedgerType;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface SupplierDetailDto extends SupplierDto {
+  ledger: SupplierLedgerEntryDto[];
+}
+
+export interface CreateSupplierRequest {
+  name: string;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateSupplierRequest {
+  name?: string;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface RecordSupplierPaymentRequest {
+  amount: number;
+  paymentMethod?: PaymentMethod;
+  note?: string;
+  idempotencyKey: string;
+}
+
+export interface PurchaseOrderItemDto {
+  id: string;
+  productId: string;
+  productName: string;
+  description: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  unitCost: number;
+  lineTotal: number;
+}
+
+export interface PurchaseOrderDto {
+  id: string;
+  businessId: string;
+  supplierId: string;
+  supplierName: string;
+  status: PurchaseOrderStatus;
+  notes: string | null;
+  itemCount: number;
+  orderedTotal: number;
+  receivedTotal: number;
+  createdAt: string;
+}
+
+export interface PurchaseOrderDetailDto extends PurchaseOrderDto {
+  items: PurchaseOrderItemDto[];
+}
+
+export interface CreatePurchaseOrderRequest {
+  supplierId: string;
+  notes?: string | null;
+  idempotencyKey: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    unitCost: number;
+  }>;
+}
+
+export interface ReceivePurchaseRequest {
+  idempotencyKey: string;
+  paymentMethod?: PaymentMethod;
+  lines: Array<{
+    itemId: string;
+    quantity: number;
+  }>;
 }
 
 export interface ProductDto {
