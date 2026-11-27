@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import { checkoutSale } from "./sales.service.js";
@@ -25,7 +26,7 @@ const checkoutSchema = z.object({
     .min(1),
 });
 
-salesRouter.post("/checkout", async (req, res, next) => {
+salesRouter.post("/checkout", requirePermission("sell"), async (req, res, next) => {
   try {
     sendSuccess(
       res,

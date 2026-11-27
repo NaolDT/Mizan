@@ -138,6 +138,19 @@ enum ShopLoyaltyType {
   REVERSAL
 }
 
+enum ShopRole {
+  OWNER
+  MANAGER
+  CASHIER
+  INVENTORY
+  ACCOUNTANT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
 model User {
   id                String           @id @default(uuid()) @db.Uuid
   name              String           @db.VarChar(120)
@@ -160,6 +173,9 @@ model User {
   stockMovements    StockMovement[]
   priceChanges      ProductPriceHistory[]
   purchaseOrders    PurchaseOrder[]
+  memberships       BusinessMembership[]
+  invitedMembers    BusinessMembership[] @relation("MembershipInviter")
+  auditEvents       AuditEvent[]
 
   @@map("users")
 }
@@ -208,9 +224,49 @@ model Business {
   purchaseOrderItems    PurchaseOrderItem[]
   supplierLedger        SupplierLedger[]
   shopLoyalty           ShopLoyaltyLedger[]
+  memberships           BusinessMembership[]
+  auditEvents           AuditEvent[]
 
   @@index([ownerId])
   @@map("businesses")
+}
+
+model BusinessMembership {
+  id          String           @id @default(uuid()) @db.Uuid
+  businessId  String           @map("business_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  role        ShopRole         @default(CASHIER)
+  status      MembershipStatus @default(ACTIVE)
+  invitedById String?          @map("invited_by_id") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User?            @relation("MembershipInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, userId])
+  @@index([userId, status])
+  @@index([businessId, status])
+  @@map("business_memberships")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(40)
+  entityType  String   @map("entity_type") @db.VarChar(40)
+  entityId    String?  @map("entity_id") @db.Uuid
+  summary     String   @db.VarChar(240)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor       User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("audit_events")
 }
 
 model Transaction {

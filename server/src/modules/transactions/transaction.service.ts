@@ -346,7 +346,8 @@ export async function updateTransaction(
 
 export async function voidTransaction(
   businessId: string,
-  transactionId: string
+  transactionId: string,
+  actorUserId?: string
 ): Promise<TransactionDto> {
   const existing = await prisma.transaction.findFirst({
     where: { id: transactionId, businessId },
@@ -370,6 +371,18 @@ export async function voidTransaction(
   }
   await reverseLoyaltyForTransaction(businessId, existing.id);
   await reverseStockForTransaction(businessId, existing.id, existing.recordedById);
+
+  if (actorUserId) {
+    const { recordAudit } = await import("../staff/audit.service.js");
+    await recordAudit({
+      businessId,
+      actorUserId,
+      action: "VOID_TRANSACTION",
+      entityType: "TRANSACTION",
+      entityId: voided.id,
+      summary: `Voided ${existing.type} ${existing.description}`.slice(0, 240),
+    });
+  }
 
   return mapTransactionDto(voided);
 }

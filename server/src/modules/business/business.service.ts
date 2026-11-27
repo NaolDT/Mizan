@@ -5,11 +5,10 @@ import { AppError } from "../../utils/apiResponse.js";
 import { mapBusinessDto } from "../auth/auth.service.js";
 
 export async function getBusinessById(
-  businessId: string,
-  ownerId: string
+  businessId: string
 ): Promise<BusinessDto> {
   const business = await prisma.business.findFirst({
-    where: { id: businessId, ownerId },
+    where: { id: businessId },
   });
 
   if (!business) {
@@ -21,11 +20,11 @@ export async function getBusinessById(
 
 export async function updateBusinessProfile(
   businessId: string,
-  ownerId: string,
+  actorUserId: string,
   input: UpdateBusinessRequest
 ): Promise<BusinessDto> {
   const existing = await prisma.business.findFirst({
-    where: { id: businessId, ownerId },
+    where: { id: businessId },
   });
 
   if (!existing) {
@@ -51,14 +50,24 @@ export async function updateBusinessProfile(
       },
     });
 
-    if (input.preferredLanguage !== undefined) {
+    if (input.preferredLanguage !== undefined && actorUserId === existing.ownerId) {
       await tx.user.update({
-        where: { id: ownerId },
+        where: { id: actorUserId },
         data: { preferredLanguage: input.preferredLanguage },
       });
     }
 
     return updatedBiz;
+  });
+
+  const { recordAudit } = await import("../staff/audit.service.js");
+  await recordAudit({
+    businessId,
+    actorUserId,
+    action: "UPDATE_BUSINESS",
+    entityType: "BUSINESS",
+    entityId: updated.id,
+    summary: "Updated shop settings",
   });
 
   return mapBusinessDto(updated);

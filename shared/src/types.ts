@@ -8,6 +8,25 @@ export type LanguageCode = "am" | "om" | "en";
 
 export type UserRole = "OWNER" | "ADMIN";
 
+export type ShopRole = "OWNER" | "MANAGER" | "CASHIER" | "INVENTORY" | "ACCOUNTANT";
+
+export type MembershipStatus = "ACTIVE" | "DISABLED";
+
+export type ShopPermission =
+  | "sell"
+  | "record_expense"
+  | "edit_transaction"
+  | "void_transaction"
+  | "view_ledger"
+  | "view_reports"
+  | "manage_inventory"
+  | "manage_purchases"
+  | "manage_customers"
+  | "manage_staff"
+  | "manage_billing"
+  | "manage_settings"
+  | "view_audit";
+
 export type BusinessCategory =
   | "RETAIL"
   | "GROCERY"
@@ -148,10 +167,50 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface AuthResponse {
-  token: string;
+export interface SessionDto {
   user: UserDto;
   business: BusinessDto;
+  shopRole: ShopRole;
+  permissions: ShopPermission[];
+}
+
+export interface AuthResponse extends SessionDto {
+  token: string;
+}
+
+export interface StaffMemberDto {
+  id: string;
+  userId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: ShopRole;
+  status: MembershipStatus;
+  createdAt: string;
+}
+
+export interface CreateStaffRequest {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  password: string;
+  role: ShopRole;
+  preferredLanguage?: LanguageCode;
+}
+
+export interface UpdateStaffRequest {
+  role?: ShopRole;
+  status?: MembershipStatus;
+}
+
+export interface AuditEventDto {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string;
+  actorName: string;
+  createdAt: string;
 }
 
 export interface UpdateBusinessRequest {

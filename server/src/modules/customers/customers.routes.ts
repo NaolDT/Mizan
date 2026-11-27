@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import {
@@ -15,7 +16,7 @@ import { redeemLoyalty } from "./loyalty.service.js";
 
 export const customersRouter = Router();
 
-customersRouter.use(requireAuth, requireTenant);
+customersRouter.use(requireAuth, requireTenant, requirePermission("manage_customers"));
 
 const createSchema = z.object({
   name: z.string().min(2).max(120),

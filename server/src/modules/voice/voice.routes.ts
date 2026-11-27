@@ -3,6 +3,7 @@ import multer from "multer";
 import { z } from "zod";
 import type { LanguageCode, TtsResponse, VoiceTurnResponse } from "@mizan/shared";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import { processAssistantTurn } from "../ai/ai.service.js";
@@ -12,7 +13,11 @@ import { transcribeSpeechBuffer } from "./voice.service.js";
 
 export const voiceRouter = Router();
 
-voiceRouter.use(requireAuth, requireTenant);
+voiceRouter.use(
+  requireAuth,
+  requireTenant,
+  requirePermission("sell", "record_expense", "manage_inventory", "manage_customers")
+);
 
 const upload = multer({
   storage: multer.memoryStorage(),

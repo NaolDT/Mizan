@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import { reserveAndRun } from "../billing/credit.service.js";
@@ -89,7 +90,11 @@ const registerSchema = z.object({
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/jpg"]);
 
-visionRouter.post("/analyze", upload.single("image"), async (req, res, next) => {
+visionRouter.post(
+  "/analyze",
+  requirePermission("sell", "manage_inventory", "manage_purchases", "record_expense"),
+  upload.single("image"),
+  async (req, res, next) => {
   try {
     if (!req.file?.buffer.length) {
       throw new AppError(400, "IMAGE_REQUIRED", "Capture a photo first");
@@ -120,7 +125,7 @@ visionRouter.post("/analyze", upload.single("image"), async (req, res, next) => 
   }
 });
 
-visionRouter.post("/confirm-sale", async (req, res, next) => {
+visionRouter.post("/confirm-sale", requirePermission("sell"), async (req, res, next) => {
   try {
     const body = saleSchema.parse(req.body);
     sendSuccess(
@@ -132,7 +137,10 @@ visionRouter.post("/confirm-sale", async (req, res, next) => {
   }
 });
 
-visionRouter.post("/confirm-purchase", async (req, res, next) => {
+visionRouter.post(
+  "/confirm-purchase",
+  requirePermission("manage_purchases"),
+  async (req, res, next) => {
   try {
     const body = purchaseSchema.parse(req.body);
     sendSuccess(
@@ -144,7 +152,11 @@ visionRouter.post("/confirm-purchase", async (req, res, next) => {
   }
 });
 
-visionRouter.post("/register-product", upload.single("image"), async (req, res, next) => {
+visionRouter.post(
+  "/register-product",
+  requirePermission("manage_inventory"),
+  upload.single("image"),
+  async (req, res, next) => {
   try {
     const rawBody =
       typeof req.body.payload === "string" ? JSON.parse(req.body.payload) : req.body;

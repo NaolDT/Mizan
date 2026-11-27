@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/modules/billing/credit.policy.test.ts src/modules/analytics/cashflow.math.test.ts src/modules/analytics/stockCover.test.ts src/modules/analytics/advisor.compose.test.ts src/modules/analytics/notices.compose.test.ts src/modules/inventory/intelligence.math.test.ts src/modules/purchases/purchases.math.test.ts src/modules/customers/customer.intel.math.test.ts src/modules/sales/sales.math.test.ts",
+    "test": "tsx --test src/modules/billing/credit.policy.test.ts src/modules/analytics/cashflow.math.test.ts src/modules/analytics/stockCover.test.ts src/modules/analytics/advisor.compose.test.ts src/modules/analytics/notices.compose.test.ts src/modules/inventory/intelligence.math.test.ts src/modules/purchases/purchases.math.test.ts src/modules/customers/customer.intel.math.test.ts src/modules/sales/sales.math.test.ts src/modules/staff/shopRbac.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",

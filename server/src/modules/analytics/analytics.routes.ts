@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import {
@@ -13,7 +14,7 @@ import { dismissBusinessNotice, listBusinessNotices } from "./notices.service.js
 
 export const analyticsRouter = Router();
 
-analyticsRouter.use(requireAuth, requireTenant);
+analyticsRouter.use(requireAuth, requireTenant, requirePermission("view_reports"));
 
 const summaryQuerySchema = z.object({
   range: z.enum(["today", "week", "month"]).default("month"),

@@ -28,6 +28,7 @@ import type {
   CreateTransactionRequest,
   FinancialSummaryDto,
   LanguageCode,
+  ShopPermission,
   TransactionDto,
   TransactionType,
   UpdateTransactionRequest,
@@ -46,6 +47,7 @@ import { NoticesPanel } from "../components/NoticesPanel";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { PosPanel } from "../components/PosPanel";
 import { PurchasesPanel } from "../components/PurchasesPanel";
+import { StaffPanel } from "../components/StaffPanel";
 import { RewardsPanel } from "../components/RewardsPanel";
 import { WalletPanel } from "../components/WalletPanel";
 import { VisionCapture } from "../components/VisionCapture";
@@ -55,6 +57,7 @@ import { useWallet } from "../hooks/useWallet";
 import { BILLING_TEXT } from "../i18n/billingText";
 import { POS_TEXT } from "../i18n/posText";
 import { PURCHASES_TEXT } from "../i18n/purchasesText";
+import { STAFF_TEXT } from "../i18n/staffText";
 import { REWARDS_TEXT } from "../i18n/rewardsText";
 import { LANGUAGE_LABELS } from "../i18n/translations";
 import { apiRequest, downloadCsv } from "../lib/api";
@@ -62,28 +65,49 @@ import { formatEtb, formatShortDate } from "../lib/format";
 
 type SummaryRange = "today" | "week" | "month";
 type LedgerFilter = "ALL" | "INCOME" | "EXPENSE" | "CREDIT";
+type DashboardTab =
+  | "dashboard"
+  | "ledger"
+  | "sell"
+  | "inventory"
+  | "customers"
+  | "purchases"
+  | "rewards"
+  | "credits"
+  | "team";
+
+function defaultDashboardTab(
+  can: (permission: ShopPermission) => boolean,
+  billingReturn: string | null
+): DashboardTab {
+  if ((billingReturn === "return" || billingReturn === "dev") && can("manage_billing")) {
+    return "credits";
+  }
+  if (can("view_reports")) return "dashboard";
+  if (can("sell")) return "sell";
+  if (can("manage_inventory")) return "inventory";
+  if (can("view_ledger")) return "ledger";
+  if (can("manage_purchases")) return "purchases";
+  if (can("manage_customers")) return "customers";
+  if (can("manage_staff") || can("view_audit")) return "team";
+  return "dashboard";
+}
 
 export function DashboardPage() {
-  const { business, logout } = useAuth();
+  const { business, logout, can } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const queryClient = useQueryClient();
 
   const [searchParams] = useSearchParams();
   const billingReturn = searchParams.get("billing");
-  const [activeTab, setActiveTab] = useState<
-    | "dashboard"
-    | "ledger"
-    | "sell"
-    | "inventory"
-    | "customers"
-    | "purchases"
-    | "rewards"
-    | "credits"
-  >(billingReturn === "return" || billingReturn === "dev" ? "credits" : "dashboard");
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
+    defaultDashboardTab(can, billingReturn)
+  );
   const refreshBilling = useRefreshBilling();
-  const wallet = useWallet();
+  const wallet = useWallet(can("manage_billing"));
   const posText = POS_TEXT[language];
   const purchasesText = PURCHASES_TEXT[language];
+  const staffText = STAFF_TEXT[language];
   const rewardsText = REWARDS_TEXT[language];
   const billingText = BILLING_TEXT[language];
   const [range, setRange] = useState<SummaryRange>("month");
@@ -102,10 +126,16 @@ export function DashboardPage() {
   const [visionOpen, setVisionOpen] = useState(false);
   const [visionWorkflow, setVisionWorkflow] = useState<VisionWorkflow>("QUICK_SALE");
 
+  const canSpeak =
+    can("sell") || can("record_expense") || can("manage_inventory") || can("manage_customers");
+  const canCapture =
+    can("sell") || can("manage_inventory") || can("manage_purchases") || can("record_expense");
+
   const summaryQuery = useQuery({
     queryKey: ["summary", range],
     queryFn: () =>
       apiRequest<FinancialSummaryDto>(`/analytics/summary?range=${range}`),
+    enabled: can("view_reports"),
   });
 
   const transactionsQuery = useQuery({
@@ -115,6 +145,7 @@ export function DashboardPage() {
       ledgerFilter,
       ledgerSearch,
     ],
+    enabled: can("view_ledger") && (activeTab === "dashboard" || activeTab === "ledger"),
     queryFn: () => {
       const params = new URLSearchParams();
       params.set("range", activeTab === "dashboard" ? range : "all");
@@ -226,113 +257,144 @@ export function DashboardPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("dashboard")}
-                  className={`font-semibold ${
-                    activeTab === "dashboard"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {t.dashboardTab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("ledger")}
-                  className={`font-semibold ${
-                    activeTab === "ledger"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {t.ledgerTab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("sell")}
-                  className={`font-semibold ${
-                    activeTab === "sell"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {posText.tab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("inventory")}
-                  className={`font-semibold ${
-                    activeTab === "inventory"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {t.inventoryTab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("customers")}
-                  className={`font-semibold ${
-                    activeTab === "customers"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {t.customersTab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("purchases")}
-                  className={`font-semibold ${
-                    activeTab === "purchases"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {purchasesText.tab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("rewards")}
-                  className={`font-semibold ${
-                    activeTab === "rewards"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {rewardsText.tab}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("credits")}
-                  className={`font-semibold ${
-                    activeTab === "credits"
-                      ? "text-emerald-700 underline underline-offset-4"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {billingText.tab}
-                </button>
+                {can("view_reports") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("dashboard")}
+                    className={`font-semibold ${
+                      activeTab === "dashboard"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {t.dashboardTab}
+                  </button>
+                )}
+                {can("view_ledger") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("ledger")}
+                    className={`font-semibold ${
+                      activeTab === "ledger"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {t.ledgerTab}
+                  </button>
+                )}
+                {can("sell") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("sell")}
+                    className={`font-semibold ${
+                      activeTab === "sell"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {posText.tab}
+                  </button>
+                )}
+                {can("manage_inventory") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("inventory")}
+                    className={`font-semibold ${
+                      activeTab === "inventory"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {t.inventoryTab}
+                  </button>
+                )}
+                {can("manage_customers") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("customers")}
+                    className={`font-semibold ${
+                      activeTab === "customers"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {t.customersTab}
+                  </button>
+                )}
+                {can("manage_purchases") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("purchases")}
+                    className={`font-semibold ${
+                      activeTab === "purchases"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {purchasesText.tab}
+                  </button>
+                )}
+                {(can("manage_staff") || can("view_audit")) && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("team")}
+                    className={`font-semibold ${
+                      activeTab === "team"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {staffText.tab}
+                  </button>
+                )}
+                {can("manage_billing") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("rewards")}
+                    className={`font-semibold ${
+                      activeTab === "rewards"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {rewardsText.tab}
+                  </button>
+                )}
+                {can("manage_billing") && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("credits")}
+                    className={`font-semibold ${
+                      activeTab === "credits"
+                        ? "text-emerald-700 underline underline-offset-4"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {billingText.tab}
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("credits")}
-              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
-                (wallet.data?.total ?? 1) <= 0
-                  ? "border-rose-200 bg-rose-50 text-rose-800"
-                  : (wallet.data?.total ?? 99) <= 10
-                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
-              }`}
-              title={billingText.remaining}
-            >
-              {wallet.data ? wallet.data.total : "—"} {t.creditsRemaining}
-            </button>
+            {can("manage_billing") && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("credits")}
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                  (wallet.data?.total ?? 1) <= 0
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : (wallet.data?.total ?? 99) <= 10
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                }`}
+                title={billingText.remaining}
+              >
+                {wallet.data ? wallet.data.total : "—"} {t.creditsRemaining}
+              </button>
+            )}
             <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
               {(["am", "om", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -350,14 +412,16 @@ export function DashboardPage() {
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
-              title={t.shopSettings}
-            >
-              <Settings className="h-4 w-4" />
-            </button>
+            {can("manage_settings") && (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
+                title={t.shopSettings}
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            )}
 
             <button
               type="button"
@@ -385,72 +449,82 @@ export function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                setAutoStartVoice(true);
-                setAssistantOpen(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400"
-            >
-              <Mic className="h-4 w-4" />
-              <span>{t.tapToSpeak}</span>
-            </button>
+            {canSpeak && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoStartVoice(true);
+                  setAssistantOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400"
+              >
+                <Mic className="h-4 w-4" />
+                <span>{t.tapToSpeak}</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setAssistantOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-900/60 px-3.5 py-2.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-900"
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>{t.askMizan}</span>
-            </button>
+            {canSpeak && (
+              <button
+                type="button"
+                onClick={() => setAssistantOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-900/60 px-3.5 py-2.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-900"
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span>{t.askMizan}</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setVisionWorkflow("QUICK_SALE");
-                setVisionOpen(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-emerald-900 hover:bg-emerald-50"
-            >
-              <Camera className="h-4 w-4" />
-              <span>{t.capturePhoto}</span>
-            </button>
+            {canCapture && (
+              <button
+                type="button"
+                onClick={() => {
+                  setVisionWorkflow(can("sell") ? "QUICK_SALE" : "ADD_INVENTORY");
+                  setVisionOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-emerald-900 hover:bg-emerald-50"
+              >
+                <Camera className="h-4 w-4" />
+                <span>{t.capturePhoto}</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() =>
-                setTxModalState({
-                  open: true,
-                  initialType: "INCOME",
-                  editing: null,
-                })
-              }
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              <Plus className="h-4 w-4 text-emerald-300" />
-              <span>{t.recordIncome}</span>
-            </button>
+            {can("sell") && (
+              <button
+                type="button"
+                onClick={() =>
+                  setTxModalState({
+                    open: true,
+                    initialType: "INCOME",
+                    editing: null,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/20"
+              >
+                <Plus className="h-4 w-4 text-emerald-300" />
+                <span>{t.recordIncome}</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() =>
-                setTxModalState({
-                  open: true,
-                  initialType: "EXPENSE",
-                  editing: null,
-                })
-              }
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              <Plus className="h-4 w-4 text-rose-300" />
-              <span>{t.recordExpense}</span>
-            </button>
+            {can("record_expense") && (
+              <button
+                type="button"
+                onClick={() =>
+                  setTxModalState({
+                    open: true,
+                    initialType: "EXPENSE",
+                    editing: null,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/20"
+              >
+                <Plus className="h-4 w-4 text-rose-300" />
+                <span>{t.recordExpense}</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {activeTab === "dashboard" && (
+        {activeTab === "dashboard" && can("view_reports") && (
           <>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-700">
@@ -659,10 +733,10 @@ export function DashboardPage() {
           </>
         )}
 
-        {activeTab === "rewards" && <RewardsPanel />}
-        {activeTab === "credits" && <WalletPanel />}
-        {activeTab === "sell" && <PosPanel />}
-        {activeTab === "inventory" && (
+        {activeTab === "rewards" && can("manage_billing") && <RewardsPanel />}
+        {activeTab === "credits" && can("manage_billing") && <WalletPanel />}
+        {activeTab === "sell" && can("sell") && <PosPanel />}
+        {activeTab === "inventory" && can("manage_inventory") && (
           <InventoryPanel
             onScanProduct={() => {
               setVisionWorkflow("ADD_INVENTORY");
@@ -670,16 +744,19 @@ export function DashboardPage() {
             }}
           />
         )}
-        {activeTab === "customers" && <CustomersPanel />}
-        {activeTab === "purchases" && <PurchasesPanel />}
+        {activeTab === "customers" && can("manage_customers") && <CustomersPanel />}
+        {activeTab === "purchases" && can("manage_purchases") && <PurchasesPanel />}
+        {activeTab === "team" && (can("manage_staff") || can("view_audit")) && <StaffPanel />}
 
         {/* Transactions Feed / Ledger */}
-        {activeTab !== "rewards" &&
+        {can("view_ledger") &&
+          activeTab !== "rewards" &&
           activeTab !== "credits" &&
           activeTab !== "inventory" &&
           activeTab !== "customers" &&
           activeTab !== "purchases" &&
-          activeTab !== "sell" && (
+          activeTab !== "sell" &&
+          activeTab !== "team" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-900">
@@ -788,29 +865,33 @@ export function DashboardPage() {
                         {formatEtb(tx.amount)}
                       </span>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTxModalState({
-                            open: true,
-                            initialType: tx.type,
-                            editing: tx,
-                          })
-                        }
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        title={t.editAction}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
+                      {can("edit_transaction") && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTxModalState({
+                              open: true,
+                              initialType: tx.type,
+                              editing: tx,
+                            })
+                          }
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          title={t.editAction}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
 
-                      <button
-                        type="button"
-                        onClick={() => voidTxMutation.mutate(tx.id)}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        title={t.voidEntry}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {can("void_transaction") && (
+                        <button
+                          type="button"
+                          onClick={() => voidTxMutation.mutate(tx.id)}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          title={t.voidEntry}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -821,27 +902,33 @@ export function DashboardPage() {
         )}
       </main>
 
-      <div className="fixed right-5 bottom-5 z-30 flex flex-col items-end gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setVisionWorkflow("QUICK_SALE");
-            setVisionOpen(true);
-          }}
-          className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-800 shadow-lg"
-        >
-          <Camera className="h-5 w-5" />
-          <span>{t.capturePhoto}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAssistantOpen(true)}
-          className="flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700"
-        >
-          <Mic className="h-5 w-5" />
-          <span>{t.askMizan}</span>
-        </button>
-      </div>
+      {(canCapture || canSpeak) && (
+        <div className="fixed right-5 bottom-5 z-30 flex flex-col items-end gap-2">
+          {canCapture && (
+            <button
+              type="button"
+              onClick={() => {
+                setVisionWorkflow(can("sell") ? "QUICK_SALE" : "ADD_INVENTORY");
+                setVisionOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-800 shadow-lg"
+            >
+              <Camera className="h-5 w-5" />
+              <span>{t.capturePhoto}</span>
+            </button>
+          )}
+          {canSpeak && (
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg hover:bg-emerald-700"
+            >
+              <Mic className="h-5 w-5" />
+              <span>{t.askMizan}</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {txModalState.open && (
         <TransactionModal
@@ -859,42 +946,64 @@ export function DashboardPage() {
         />
       )}
 
-      {settingsOpen && (
+      {settingsOpen && can("manage_settings") && (
         <BusinessSettingsModal onClose={() => setSettingsOpen(false)} />
       )}
 
-      <AssistantDrawer
-        open={assistantOpen}
-        autoStartVoice={autoStartVoice}
-        onAutoStartConsumed={() => setAutoStartVoice(false)}
-        onClose={() => setAssistantOpen(false)}
-        onOpenRewards={() => {
-          setAssistantOpen(false);
-          setActiveTab("rewards");
-        }}
-        onOpenCamera={() => {
-          setAssistantOpen(false);
-          setVisionWorkflow("QUICK_SALE");
-          setVisionOpen(true);
-        }}
-        onOpenCredits={() => {
-          setAssistantOpen(false);
-          setActiveTab("credits");
-        }}
-        onRecordByHand={() => {
-          setAssistantOpen(false);
-          setTxModalState({ open: true, initialType: "INCOME", editing: null });
-        }}
-      />
+      {canSpeak && (
+        <AssistantDrawer
+          open={assistantOpen}
+          autoStartVoice={autoStartVoice}
+          onAutoStartConsumed={() => setAutoStartVoice(false)}
+          onClose={() => setAssistantOpen(false)}
+          onOpenRewards={
+            can("manage_billing")
+              ? () => {
+                  setAssistantOpen(false);
+                  setActiveTab("rewards");
+                }
+              : undefined
+          }
+          onOpenCamera={
+            canCapture
+              ? () => {
+                  setAssistantOpen(false);
+                  setVisionWorkflow(can("sell") ? "QUICK_SALE" : "ADD_INVENTORY");
+                  setVisionOpen(true);
+                }
+              : undefined
+          }
+          onOpenCredits={
+            can("manage_billing")
+              ? () => {
+                  setAssistantOpen(false);
+                  setActiveTab("credits");
+                }
+              : undefined
+          }
+          onRecordByHand={() => {
+            setAssistantOpen(false);
+            setTxModalState({
+              open: true,
+              initialType: can("sell") ? "INCOME" : "EXPENSE",
+              editing: null,
+            });
+          }}
+        />
+      )}
 
-      {visionOpen && (
+      {visionOpen && canCapture && (
         <VisionCapture
           initialWorkflow={visionWorkflow}
           onClose={() => setVisionOpen(false)}
-          onOpenCredits={() => {
-            setVisionOpen(false);
-            setActiveTab("credits");
-          }}
+          onOpenCredits={
+            can("manage_billing")
+              ? () => {
+                  setVisionOpen(false);
+                  setActiveTab("credits");
+                }
+              : undefined
+          }
           onRecordByHand={() => {
             setVisionOpen(false);
             setTxModalState({

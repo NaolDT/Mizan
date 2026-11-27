@@ -5,11 +5,15 @@ import type {
   BusinessDto,
   LoginRequest,
   RegisterRequest,
+  SessionDto,
+  ShopRole,
   UserDto,
 } from "@mizan/shared";
 import { prisma } from "../../config/prisma.js";
 import { signAuthToken } from "../../middleware/auth.middleware.js";
 import { AppError } from "../../utils/apiResponse.js";
+import { ensureOwnerMembership, resolveShopAccess } from "../staff/membership.service.js";
+import { permissionsForRole } from "../staff/shopRbac.js";
 import {
   generateUniqueReferralCode,
   normalizeReferralCode,
@@ -44,6 +48,15 @@ export function mapUserDto(user: User): UserDto {
     preferredLanguage: user.preferredLanguage,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
+  };
+}
+
+function toSession(user: User, business: Business, shopRole: ShopRole): SessionDto {
+  return {
+    user: mapUserDto(user),
+    business: mapBusinessDto(business),
+    shopRole,
+    permissions: permissionsForRole(shopRole),
   };
 }
 
@@ -144,6 +157,9 @@ export async function registerMerchant(input: RegisterRequest): Promise<AuthResp
         currency: "ETB",
         preferredLanguage: input.preferredLanguage,
         plan: "FREE",
+        memberships: {
+          create: { userId: createdUser.id, role: "OWNER", status: "ACTIVE" },
+        },
       },
     });
 
@@ -159,8 +175,7 @@ export async function registerMerchant(input: RegisterRequest): Promise<AuthResp
 
   return {
     token,
-    user: mapUserDto(user),
-    business: mapBusinessDto(business),
+    ...toSession(user, business, "OWNER"),
   };
 }
 
@@ -189,30 +204,17 @@ export async function loginMerchant(input: LoginRequest): Promise<AuthResponse> 
     throw new AppError(401, "INVALID_CREDENTIALS", "Invalid phone/email or password");
   }
 
-  let business = await prisma.business.findFirst({
-    where: { ownerId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
+  const access = await resolveShopAccess(user.id);
+  const business = await prisma.business.findUnique({ where: { id: access.businessId } });
   if (!business) {
-    business = await prisma.business.create({
-      data: {
-        ownerId: user.id,
-        name: `${user.name}'s Business`,
-        category: "RETAIL",
-        currency: "ETB",
-        preferredLanguage: user.preferredLanguage,
-        plan: "FREE",
-      },
-    });
+    throw new AppError(404, "BUSINESS_NOT_FOUND", "Business profile not found");
   }
 
   const token = signAuthToken({ sub: user.id, role: user.role });
 
   return {
     token,
-    user: mapUserDto(user),
-    business: mapBusinessDto(business),
+    ...toSession(user, business, access.shopRole),
   };
 }
 
@@ -428,32 +430,26 @@ export async function loginOrProvisionDemoMerchant(): Promise<AuthResponse> {
     }
   }
 
+  await ensureOwnerMembership(demoBusiness.id, demoUser.id);
   const token = signAuthToken({ sub: demoUser.id, role: demoUser.role });
 
   return {
     token,
-    user: mapUserDto(demoUser),
-    business: mapBusinessDto(demoBusiness),
+    ...toSession(demoUser, demoBusiness, "OWNER"),
   };
 }
 
-export async function getCurrentSessionProfile(userId: string) {
+export async function getCurrentSessionProfile(userId: string): Promise<SessionDto> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     throw new AppError(404, "USER_NOT_FOUND", "User account not found");
   }
 
-  const business = await prisma.business.findFirst({
-    where: { ownerId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
+  const access = await resolveShopAccess(user.id);
+  const business = await prisma.business.findUnique({ where: { id: access.businessId } });
   if (!business) {
     throw new AppError(404, "BUSINESS_NOT_FOUND", "Business profile not found");
   }
 
-  return {
-    user: mapUserDto(user),
-    business: mapBusinessDto(business),
-  };
+  return toSession(user, business, access.shopRole);
 }

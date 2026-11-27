@@ -670,6 +670,7 @@ export function AssistantDrawer({
             <button
               type="button"
               onClick={onOpenRewards}
+              disabled={!onOpenRewards}
               className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                 quotaOut
                   ? "bg-rose-50 text-rose-700"

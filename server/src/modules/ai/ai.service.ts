@@ -14,12 +14,14 @@ import type {
   ProposedCustomerPaymentDraft,
   ProposedStockDraft,
   ProposedTransactionDraft,
+  ShopRole,
   StockMovementReason,
   SupportedAiIntent,
   TransactionCategory,
 } from "@mizan/shared";
 import { env } from "../../config/env.js";
 import { prisma } from "../../config/prisma.js";
+import { assertShopPermission } from "../../middleware/permission.middleware.js";
 import { AppError } from "../../utils/apiResponse.js";
 import { formatEatDateKey } from "../../utils/eatDate.js";
 import { normalizeSpokenText } from "../../utils/spokenText.js";
@@ -1090,6 +1092,7 @@ export async function processAssistantTurn(params: {
 export async function confirmProposedAction(
   businessId: string,
   userId: string,
+  shopRole: ShopRole,
   messageId: string,
   input: ConfirmActionRequest
 ): Promise<ConfirmActionResponse> {
@@ -1135,6 +1138,7 @@ export async function confirmProposedAction(
   const draft = message.proposedAction as unknown as ProposedActionDraft;
 
   if (draft.kind === "STOCK") {
+    assertShopPermission(shopRole, "manage_inventory");
     const stockDraft = draft as ProposedStockDraft;
     const product = await findOrCreateProductByName(businessId, stockDraft.productName);
     const updatedProduct = await adjustStock(businessId, product.id, userId, {
@@ -1156,6 +1160,7 @@ export async function confirmProposedAction(
   }
 
   if (draft.kind === "CUSTOMER_PAYMENT") {
+    assertShopPermission(shopRole, "manage_customers");
     const payDraft = draft as ProposedCustomerPaymentDraft;
     const customer = await findCustomerByName(businessId, payDraft.customerName);
     if (!customer) {
@@ -1187,6 +1192,7 @@ export async function confirmProposedAction(
     kind: "TRANSACTION",
     currency: "ETB",
   };
+  assertShopPermission(shopRole, merged.type === "INCOME" ? "sell" : "record_expense");
 
   let productId: string | null = null;
   if (merged.productName) {

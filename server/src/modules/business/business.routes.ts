@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import { getBusinessById, updateBusinessProfile } from "./business.service.js";
@@ -30,14 +31,14 @@ const updateBusinessSchema = z.object({
 
 businessRouter.get("/current", async (req, res, next) => {
   try {
-    const business = await getBusinessById(req.tenant!.businessId, req.tenant!.userId);
+    const business = await getBusinessById(req.tenant!.businessId);
     sendSuccess(res, business);
   } catch (err) {
     next(err);
   }
 });
 
-businessRouter.patch("/current", async (req, res, next) => {
+businessRouter.patch("/current", requirePermission("manage_settings"), async (req, res, next) => {
   try {
     const body = updateBusinessSchema.parse(req.body);
     const updated = await updateBusinessProfile(

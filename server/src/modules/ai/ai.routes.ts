@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import { reserveAndRun } from "../billing/credit.service.js";
@@ -13,7 +14,11 @@ import {
 
 export const aiRouter = Router();
 
-aiRouter.use(requireAuth, requireTenant);
+aiRouter.use(
+  requireAuth,
+  requireTenant,
+  requirePermission("sell", "record_expense", "manage_inventory", "manage_customers")
+);
 
 const chatBodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -102,6 +107,7 @@ aiRouter.post("/messages/:messageId/confirm", async (req, res, next) => {
     const confirmed = await confirmProposedAction(
       req.tenant!.businessId,
       req.tenant!.userId,
+      req.tenant!.shopRole,
       String(req.params.messageId),
       body
     );

@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { AppError, sendSuccess } from "../../utils/apiResponse.js";
 import { getWallet, markNoticesRead } from "./credit.service.js";
@@ -65,7 +66,15 @@ billingRouter.get("/payments/chapa/callback", async (req, res, next) => {
 
 billingRouter.use(requireAuth, requireTenant);
 
-billingRouter.get("/wallet", async (req, res, next) => {
+const canUseCredits = requirePermission(
+  "manage_billing",
+  "sell",
+  "record_expense",
+  "manage_inventory",
+  "manage_customers"
+);
+
+billingRouter.get("/wallet", canUseCredits, async (req, res, next) => {
   try {
     sendSuccess(res, await getWallet(req.tenant!.businessId));
   } catch (err) {
@@ -73,7 +82,7 @@ billingRouter.get("/wallet", async (req, res, next) => {
   }
 });
 
-billingRouter.post("/notices/read", async (req, res, next) => {
+billingRouter.post("/notices/read", canUseCredits, async (req, res, next) => {
   try {
     await markNoticesRead(req.tenant!.businessId);
     sendSuccess(res, { read: true });
@@ -82,7 +91,7 @@ billingRouter.post("/notices/read", async (req, res, next) => {
   }
 });
 
-billingRouter.get("/payments", async (req, res, next) => {
+billingRouter.get("/payments", requirePermission("manage_billing"), async (req, res, next) => {
   try {
     sendSuccess(res, await listBusinessPayments(req.tenant!.businessId));
   } catch (err) {
@@ -90,7 +99,7 @@ billingRouter.get("/payments", async (req, res, next) => {
   }
 });
 
-billingRouter.post("/checkout", async (req, res, next) => {
+billingRouter.post("/checkout", requirePermission("manage_billing"), async (req, res, next) => {
   try {
     const body = checkoutSchema.parse(req.body);
     sendSuccess(
@@ -109,7 +118,7 @@ billingRouter.post("/checkout", async (req, res, next) => {
   }
 });
 
-billingRouter.post("/payments/:txRef/verify", async (req, res, next) => {
+billingRouter.post("/payments/:txRef/verify", requirePermission("manage_billing"), async (req, res, next) => {
   try {
     const txRef = txRefFrom(req.params.txRef);
     if (!txRef) throw new AppError(400, "INVALID_REFERENCE", "Payment reference is not valid.");
@@ -119,7 +128,7 @@ billingRouter.post("/payments/:txRef/verify", async (req, res, next) => {
   }
 });
 
-billingRouter.post("/payments/dev/simulate", async (req, res, next) => {
+billingRouter.post("/payments/dev/simulate", requirePermission("manage_billing"), async (req, res, next) => {
   try {
     const body = devSchema.parse(req.body);
     sendSuccess(res, await simulateDevPayment(req.tenant!.businessId, body.txRef, body.outcome));
@@ -128,7 +137,7 @@ billingRouter.post("/payments/dev/simulate", async (req, res, next) => {
   }
 });
 
-billingRouter.post("/subscription/cancel", async (req, res, next) => {
+billingRouter.post("/subscription/cancel", requirePermission("manage_billing"), async (req, res, next) => {
   try {
     const business = await prisma.business.findUnique({ where: { id: req.tenant!.businessId } });
     if (!business) throw new AppError(404, "BUSINESS_NOT_FOUND", "Business profile not found");

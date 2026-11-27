@@ -1,13 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
-import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/apiResponse.js";
+import { resolveShopAccess } from "../modules/staff/membership.service.js";
 
 /**
- * Resolves the authenticated user's owned Business from PostgreSQL and binds
- * `req.tenant = { userId, businessId }`.
+ * Resolves the authenticated user's shop from membership (or owned-business
+ * fallback) and binds `req.tenant = { userId, businessId, shopRole }`.
  *
  * Security Mandate (AGENTS.md): NEVER trust a `businessId` from body/query/LLM;
- * always verify ownership against `users.id` here.
+ * only `x-business-id` is accepted, and only after membership is verified.
  */
 export async function requireTenant(
   req: Request,
@@ -24,33 +24,11 @@ export async function requireTenant(
         ? req.headers["x-business-id"].trim()
         : undefined;
 
-    const business = headerBusinessId
-      ? await prisma.business.findFirst({
-          where: {
-            id: headerBusinessId,
-            ownerId: req.auth.userId,
-          },
-          select: { id: true },
-        })
-      : await prisma.business.findFirst({
-          where: {
-            ownerId: req.auth.userId,
-          },
-          orderBy: { createdAt: "asc" },
-          select: { id: true },
-        });
-
-    if (!business) {
-      throw new AppError(
-        404,
-        "BUSINESS_NOT_FOUND",
-        "No business profile found for this account"
-      );
-    }
-
+    const access = await resolveShopAccess(req.auth.userId, headerBusinessId || undefined);
     req.tenant = {
       userId: req.auth.userId,
-      businessId: business.id,
+      businessId: access.businessId,
+      shopRole: access.shopRole,
     };
 
     next();

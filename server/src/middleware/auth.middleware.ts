@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import type { ShopRole } from "@mizan/shared";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { AppError } from "../utils/apiResponse.js";
@@ -20,6 +21,7 @@ declare global {
       tenant?: {
         userId: string;
         businessId: string;
+        shopRole: ShopRole;
       };
     }
   }

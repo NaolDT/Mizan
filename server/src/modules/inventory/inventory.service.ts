@@ -204,6 +204,21 @@ export async function updateProduct(
     previousSelling: existing.sellingPrice,
     previousCost: existing.costPrice,
   });
+
+  const sellingChanged = String(existing.sellingPrice ?? "") !== String(nextSelling ?? "");
+  const costChanged = String(existing.costPrice ?? "") !== String(nextCost ?? "");
+  if (recordedById && (sellingChanged || costChanged)) {
+    const { recordAudit } = await import("../staff/audit.service.js");
+    await recordAudit({
+      businessId,
+      actorUserId: recordedById,
+      action: "UPDATE_PRODUCT_PRICE",
+      entityType: "PRODUCT",
+      entityId: existing.id,
+      summary: `Price change on ${updated.name}`.slice(0, 240),
+    });
+  }
+
   return mapProductDto(updated);
 }
 
@@ -316,7 +331,7 @@ export async function adjustStock(
   const delta = new Prisma.Decimal(input.quantityDelta.toFixed(2));
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const product = await tx.product.findFirst({
         where: { id: productId, businessId },
       });
@@ -351,6 +366,19 @@ export async function adjustStock(
 
       return mapProductDto(updated);
     });
+
+    if (input.reason !== "SALE") {
+      const { recordAudit } = await import("../staff/audit.service.js");
+      await recordAudit({
+        businessId,
+        actorUserId: recordedById,
+        action: "ADJUST_STOCK",
+        entityType: "PRODUCT",
+        entityId: productId,
+        summary: `${input.reason} ${updated.name} (${input.quantityDelta})`.slice(0, 240),
+      });
+    }
+    return updated;
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw err;

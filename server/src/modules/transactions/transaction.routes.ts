@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middleware/auth.middleware.js";
+import { assertShopPermission, requirePermission } from "../../middleware/permission.middleware.js";
 import { requireTenant } from "../../middleware/tenant.middleware.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
 import {
@@ -69,7 +70,7 @@ const updateTxSchema = z.object({
   transactionDate: z.string().optional(),
 });
 
-transactionRouter.get("/export", async (req, res, next) => {
+transactionRouter.get("/export", requirePermission("view_ledger"), async (req, res, next) => {
   try {
     const query = listQuerySchema.parse(req.query);
     const csv = await exportTransactionsCsv(req.tenant!.businessId, query);
@@ -81,7 +82,7 @@ transactionRouter.get("/export", async (req, res, next) => {
   }
 });
 
-transactionRouter.get("/", async (req, res, next) => {
+transactionRouter.get("/", requirePermission("view_ledger"), async (req, res, next) => {
   try {
     const query = listQuerySchema.parse(req.query);
     const result = await listTransactions(req.tenant!.businessId, query);
@@ -94,6 +95,10 @@ transactionRouter.get("/", async (req, res, next) => {
 transactionRouter.post("/", async (req, res, next) => {
   try {
     const body = createTxSchema.parse(req.body);
+    assertShopPermission(
+      req.tenant!.shopRole,
+      body.type === "INCOME" ? "sell" : "record_expense"
+    );
     const tx = await createTransaction(
       req.tenant!.businessId,
       req.tenant!.userId,
@@ -105,7 +110,7 @@ transactionRouter.post("/", async (req, res, next) => {
   }
 });
 
-transactionRouter.patch("/:id", async (req, res, next) => {
+transactionRouter.patch("/:id", requirePermission("edit_transaction"), async (req, res, next) => {
   try {
     const body = updateTxSchema.parse(req.body);
     const updated = await updateTransaction(
@@ -119,11 +124,12 @@ transactionRouter.patch("/:id", async (req, res, next) => {
   }
 });
 
-transactionRouter.post("/:id/void", async (req, res, next) => {
+transactionRouter.post("/:id/void", requirePermission("void_transaction"), async (req, res, next) => {
   try {
     const voided = await voidTransaction(
       req.tenant!.businessId,
-      String(req.params.id)
+      String(req.params.id),
+      req.tenant!.userId
     );
     sendSuccess(res, voided);
   } catch (err) {
